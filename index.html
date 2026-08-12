@@ -1,0 +1,1212 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<title>Picking — Vesco</title>
+<meta name="theme-color" content="#05070a">
+<link rel="icon" href="data:,">
+
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          brand: {
+            bg: '#05070a',
+            card: '#0b1320',
+            card2: '#0e1626',
+            border: 'rgba(255,255,255,.09)',
+            orange: '#ff8a00',
+            blue: '#0ea5e9',
+            green: '#22c55e',
+            red: '#ef4444',
+            yellow: '#eab308'
+          }
+        }
+      }
+    }
+  };
+</script>
+
+<!-- Firebase (Realtime Database) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-database-compat.js"></script>
+
+<!-- pdf.js (leitura de PDF no navegador) -->
+<script src="https://unpkg.com/pdfjs-dist@3.11.174/legacy/build/pdf.min.js"></script>
+
+<!-- html5-qrcode (câmera / QR / código de barras) -->
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+
+<style>
+  html,body{background:#05070a;overscroll-behavior:none}
+  ::-webkit-scrollbar{width:8px;height:8px}
+  ::-webkit-scrollbar-thumb{background:rgba(255,255,255,.14);border-radius:99px}
+  .safe-b{padding-bottom:env(safe-area-inset-bottom)}
+  .safe-t{padding-top:env(safe-area-inset-top)}
+  @keyframes pulseFab{0%,100%{box-shadow:0 0 0 0 rgba(255,138,0,.55)}50%{box-shadow:0 0 0 14px rgba(255,138,0,0)}}
+  .fab-pulse{animation:pulseFab 2.2s ease-out infinite}
+  .toast-enter{animation:toastIn .18s ease both}
+  @keyframes toastIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+  .modal-card{animation:modalIn .16s ease both}
+  @keyframes modalIn{from{opacity:0;transform:scale(.97)}to{opacity:1;transform:scale(1)}}
+  input[type=number]::-webkit-inner-spin-button{opacity:1}
+  .tag-pill{display:inline-flex;align-items:center;gap:4px;border-radius:999px;padding:2px 8px;font-size:10px;font-weight:800;letter-spacing:.02em}
+</style>
+</head>
+<body class="bg-brand-bg text-slate-100 min-h-screen font-sans text-[13px]">
+
+<!-- ===================== TOPO ===================== -->
+<header class="safe-t sticky top-0 z-40 bg-brand-bg/95 backdrop-blur border-b border-brand-border">
+  <div class="max-w-lg mx-auto px-3 pt-3 pb-2">
+    <div class="flex items-center justify-between gap-2">
+      <div>
+        <h1 class="text-lg font-black tracking-tight leading-none">Picking <span class="text-brand-orange">Vesco</span></h1>
+        <div class="flex items-center gap-1 mt-1">
+          <span id="conn-dot" class="w-1.5 h-1.5 rounded-full bg-slate-600"></span>
+          <span id="conn-txt" class="text-[10px] text-slate-500 font-bold">conectando...</span>
+        </div>
+      </div>
+      <button id="btn-operador" class="text-left bg-brand-card border border-brand-border rounded-xl px-3 py-2 min-w-[110px]">
+        <div class="text-[9px] text-slate-500 font-bold uppercase">Operador</div>
+        <div id="operador-nome" class="text-xs font-black truncate max-w-[110px]">Definir</div>
+      </button>
+    </div>
+
+    <select id="sel-galpao" class="mt-2 w-full bg-brand-card border border-brand-border rounded-xl px-3 py-2.5 text-sm font-bold outline-none">
+      <option value="todos">Todos os galpões</option>
+    </select>
+  </div>
+
+  <!-- Tabs -->
+  <nav class="max-w-lg mx-auto px-3 pb-2 grid grid-cols-4 gap-1.5">
+    <button data-tab="fila" class="tab-btn min-h-[38px] rounded-xl text-[11px] font-black bg-brand-orange text-black">Fila</button>
+    <button data-tab="revisao" class="tab-btn min-h-[38px] rounded-xl text-[11px] font-black bg-brand-card text-slate-300 border border-brand-border">Revisão <span id="badge-revisao" class="hidden ml-1 bg-brand-yellow text-black rounded-full px-1.5">0</span></button>
+    <button data-tab="importar" class="tab-btn min-h-[38px] rounded-xl text-[11px] font-black bg-brand-card text-slate-300 border border-brand-border">Importar</button>
+    <button data-tab="pausar" class="tab-btn min-h-[38px] rounded-xl text-[11px] font-black bg-brand-card text-slate-300 border border-brand-border">🔒 Anúncios</button>
+  </nav>
+</header>
+
+<main class="max-w-lg mx-auto px-3 pt-3 pb-32">
+
+  <!-- ============ VIEW: FILA ============ -->
+  <section id="view-fila" class="view-panel space-y-3">
+    <div class="grid grid-cols-4 gap-2">
+      <div class="bg-brand-card border border-brand-border rounded-xl p-2 text-center">
+        <div class="text-[9px] text-slate-500 font-bold uppercase">Pendentes</div>
+        <div id="kpi-pendentes" class="text-xl font-black mt-0.5">0</div>
+      </div>
+      <div class="bg-brand-card border border-brand-border rounded-xl p-2 text-center">
+        <div class="text-[9px] text-slate-500 font-bold uppercase">Revisão</div>
+        <div id="kpi-revisao" class="text-xl font-black mt-0.5 text-brand-yellow">0</div>
+      </div>
+      <div class="bg-brand-card border border-brand-border rounded-xl p-2 text-center">
+        <div class="text-[9px] text-slate-500 font-bold uppercase">Separados</div>
+        <div id="kpi-separados" class="text-xl font-black mt-0.5 text-brand-green">0</div>
+      </div>
+      <div class="bg-brand-card border border-brand-border rounded-xl p-2 text-center">
+        <div class="text-[9px] text-slate-500 font-bold uppercase">Faltando</div>
+        <div id="kpi-faltando" class="text-xl font-black mt-0.5 text-brand-red">0</div>
+      </div>
+    </div>
+
+    <div class="bg-brand-card border border-brand-border rounded-xl p-2.5">
+      <input id="busca-manual" placeholder="Digite/cole/bipe o SKU e pressione Enter" autocomplete="off"
+        class="w-full bg-black/40 border-2 border-brand-orange/60 rounded-xl px-3 py-3 text-center text-base font-black outline-none focus:border-brand-blue">
+    </div>
+
+    <div id="lista-fila" class="space-y-2"></div>
+  </section>
+
+  <!-- ============ VIEW: REVISÃO ============ -->
+  <section id="view-revisao" class="view-panel hidden space-y-2">
+    <div class="bg-brand-yellow/10 border border-brand-yellow/40 rounded-xl p-3 text-[11px] text-yellow-200">
+      Itens que um operador não encontrou. Bipe novamente para tentar achar — se não achar de novo, o item vai para <b>Falta Definitiva</b>.
+    </div>
+    <div id="lista-revisao" class="space-y-2"></div>
+  </section>
+
+  <!-- ============ VIEW: IMPORTAR ============ -->
+  <section id="view-importar" class="view-panel hidden space-y-3">
+    <div class="bg-brand-card border border-dashed border-brand-blue/50 rounded-xl p-4 text-center">
+      <div class="text-3xl mb-1">📄</div>
+      <div class="font-black text-sm mb-1">Anexar PDF de Separação</div>
+      <div class="text-[11px] text-slate-400 mb-3">Exportado do Tiny/Olist ("Separação de mercadorias"). O sistema extrai SKU, GTIN, descrição, quantidade e localização automaticamente.</div>
+      <label class="inline-flex items-center justify-center min-h-[46px] px-5 rounded-xl bg-brand-blue text-black font-black text-sm cursor-pointer">
+        Escolher PDF
+        <input id="input-pdf" type="file" accept="application/pdf" class="hidden">
+      </label>
+      <div id="pdf-status" class="text-[11px] text-slate-400 mt-2"></div>
+    </div>
+
+    <div id="pdf-preview-wrap" class="hidden space-y-2">
+      <div>
+        <div class="text-[10px] text-slate-500 font-bold uppercase mb-1">Identificação da separação (romaneio / pedido — opcional)</div>
+        <input id="pdf-identificacao" placeholder="Ex: Romaneio 1234 ou Pedido 98765" class="w-full bg-black/40 border border-brand-border rounded-xl px-3 py-2.5 font-bold outline-none">
+      </div>
+      <div class="flex items-center justify-between">
+        <div class="font-black text-sm">Itens extraídos (<span id="pdf-count">0</span>)</div>
+        <button id="btn-add-row" class="text-[11px] font-bold text-brand-blue">+ linha manual</button>
+      </div>
+      <div id="pdf-preview-list" class="space-y-1.5 max-h-[46vh] overflow-y-auto pr-1"></div>
+      <div class="grid grid-cols-2 gap-2 pt-1">
+        <button id="btn-cancelar-import" class="min-h-[48px] rounded-xl bg-brand-card border border-brand-border font-black text-sm">Cancelar</button>
+        <button id="btn-confirmar-import" class="min-h-[48px] rounded-xl bg-brand-green text-black font-black text-sm">Enviar para a fila</button>
+      </div>
+    </div>
+
+    <div>
+      <div class="font-black text-sm mb-1.5">Importações recentes</div>
+      <div id="lista-importacoes" class="space-y-1.5"></div>
+    </div>
+  </section>
+
+  <!-- ============ VIEW: PAUSAR ANÚNCIOS (restrita) ============ -->
+  <section id="view-pausar" class="view-panel hidden space-y-2">
+    <div id="pausar-locked" class="bg-brand-card border border-brand-border rounded-xl p-4 text-center space-y-2">
+      <div class="text-2xl">🔒</div>
+      <div class="font-black text-sm">Área restrita — Equipe de e-commerce / Supervisão</div>
+      <input id="pin-input" type="password" inputmode="numeric" placeholder="PIN de acesso"
+        class="w-full bg-black/40 border border-brand-border rounded-xl px-3 py-3 text-center font-black tracking-widest outline-none">
+      <button id="btn-pin" class="w-full min-h-[44px] rounded-xl bg-brand-orange text-black font-black text-sm">Entrar</button>
+    </div>
+    <div id="pausar-content" class="hidden space-y-2">
+      <div class="bg-brand-red/10 border border-brand-red/40 rounded-xl p-3 text-[11px] text-red-200">
+        Produtos com <b>falta definitiva</b> confirmada por dois operadores. Pausar os anúncios correspondentes até repor o estoque.
+      </div>
+      <div id="lista-pausar" class="space-y-2"></div>
+    </div>
+  </section>
+
+</main>
+
+<!-- ===================== BOTÃO FLUTUANTE BIPAR ===================== -->
+<button id="fab-bipar" class="fab-pulse fixed z-30 right-5 bottom-6 w-20 h-20 rounded-full bg-brand-orange text-black shadow-2xl shadow-black/60 flex flex-col items-center justify-center font-black active:scale-95 transition">
+  <span class="text-2xl leading-none">📷</span>
+  <span class="text-[10px] mt-0.5">BIPAR</span>
+</button>
+
+<!-- ===================== MODAL: OPERADOR ===================== -->
+<div id="modal-operador" class="hidden fixed inset-0 z-[80] bg-black/85 flex items-center justify-center p-4">
+  <div class="modal-card bg-brand-card border border-brand-border rounded-2xl p-4 w-full max-w-sm space-y-3">
+    <div class="font-black text-base">Quem está operando?</div>
+    <input id="input-operador-nome" placeholder="Seu nome" class="w-full bg-black/40 border border-brand-border rounded-xl px-3 py-3 outline-none font-bold">
+    <select id="input-operador-galpao" class="w-full bg-black/40 border border-brand-border rounded-xl px-3 py-3 outline-none font-bold"></select>
+    <button id="btn-salvar-operador" class="w-full min-h-[46px] rounded-xl bg-brand-orange text-black font-black">Começar a separar</button>
+  </div>
+</div>
+
+<!-- ===================== MODAL: CÂMERA ===================== -->
+<div id="modal-camera" class="hidden fixed inset-0 z-[90] bg-black/95 flex items-center justify-center p-2">
+  <div class="modal-card w-full max-w-md bg-[#07111d] border border-brand-orange/50 rounded-2xl overflow-hidden flex flex-col max-h-[95vh]">
+    <div class="flex items-center justify-between gap-2 px-3 py-2.5 border-b border-brand-border bg-[#081421]">
+      <div>
+        <div class="font-black text-sm">Leitor por câmera</div>
+        <div id="camera-context" class="text-[10px] text-slate-400">Aponte para o código do produto</div>
+      </div>
+      <button id="btn-fechar-camera" class="text-[11px] font-black text-red-300 bg-red-500/10 border border-red-500/40 rounded-lg px-2.5 py-1.5">Fechar</button>
+    </div>
+    <div class="relative bg-black min-h-[280px] flex items-center justify-center">
+      <video id="camera-video" playsinline muted autoplay class="w-full max-h-[62vh] object-cover"></video>
+      <div id="camera-region" class="w-full min-h-[300px] hidden"></div>
+      <div class="absolute left-[7%] right-[7%] top-[38%] h-20 border-2 border-brand-orange rounded-xl pointer-events-none shadow-[0_0_0_999px_rgba(0,0,0,.35)]"></div>
+    </div>
+    <div id="camera-status" class="px-3 py-2 text-[11px] text-slate-300 bg-[#0b1420] border-t border-brand-border">Preparando câmera...</div>
+    <div class="grid grid-cols-2 gap-2 p-3 bg-[#07111d]">
+      <button id="btn-flip-camera" class="min-h-[42px] rounded-xl bg-brand-card2 border border-brand-border font-bold text-xs">Alternar câmera</button>
+      <button id="btn-foto-camera" class="min-h-[42px] rounded-xl bg-brand-orange text-black font-bold text-xs">Tirar foto do código</button>
+    </div>
+  </div>
+</div>
+<input id="input-foto-camera" type="file" accept="image/*" capture="environment" class="hidden">
+
+<!-- ===================== MODAL: CONFIRMAR SEPARAÇÃO ===================== -->
+<div id="modal-confirmar" class="hidden fixed inset-0 z-[85] bg-black/85 flex items-end sm:items-center justify-center p-2">
+  <div class="modal-card w-full max-w-md bg-brand-card border border-brand-border rounded-2xl p-4 space-y-3 max-h-[92vh] overflow-y-auto">
+    <div>
+      <div class="text-[10px] text-slate-500 font-bold uppercase">SKU</div>
+      <div id="conf-sku" class="text-lg font-black">--</div>
+      <div id="conf-descricao" class="text-xs text-slate-400 mt-0.5">--</div>
+      <div class="flex flex-wrap gap-1.5 mt-2">
+        <span id="conf-pedido" class="tag-pill bg-sky-500/10 text-sky-300 border border-sky-500/30">-- </span>
+        <span id="conf-galpao" class="tag-pill bg-slate-500/10 text-slate-300 border border-slate-500/30">Galpão --</span>
+        <span id="conf-origem" class="hidden tag-pill bg-orange-500/10 text-orange-300 border border-orange-500/30">📍 Buscar em: --</span>
+        <span id="conf-status-tag" class="tag-pill hidden bg-yellow-500/10 text-yellow-300 border border-yellow-500/30">Em revisão</span>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-2 gap-2">
+      <div>
+        <div class="text-[10px] text-slate-500 font-bold uppercase mb-1">Quantidade separada</div>
+        <input id="conf-qtd" type="number" step="0.01" min="0" class="w-full bg-black/40 border border-brand-border rounded-xl px-3 py-3 text-center font-black text-lg outline-none">
+      </div>
+      <div>
+        <div class="text-[10px] text-slate-500 font-bold uppercase mb-1">Pedida</div>
+        <div id="conf-qtd-pedida" class="w-full bg-black/20 border border-brand-border rounded-xl px-3 py-3 text-center font-black text-lg text-slate-400">--</div>
+      </div>
+    </div>
+
+    <div>
+      <div class="text-[10px] text-slate-500 font-bold uppercase mb-1">Local físico onde o produto foi colocado</div>
+      <div class="flex gap-2">
+        <input id="conf-local" placeholder="Ex: A1-03" class="flex-1 bg-black/40 border border-brand-border rounded-xl px-3 py-3 font-bold outline-none">
+        <button id="btn-bipar-local" class="px-3 rounded-xl bg-brand-card2 border border-brand-border font-bold text-xs">📷</button>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 gap-2 pt-1">
+      <button id="btn-confirmar-separacao" class="min-h-[52px] rounded-xl bg-brand-green text-black font-black text-sm">✔ Confirmar Separação</button>
+      <button id="btn-nao-encontrado" class="min-h-[48px] rounded-xl bg-brand-yellow text-black font-black text-sm">Não Encontrado</button>
+      <button id="btn-cancelar-confirmar" class="min-h-[42px] rounded-xl bg-transparent border border-brand-border font-bold text-xs text-slate-400">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== MODAL: SELECIONAR ENTRE VÁRIOS PEDIDOS ===================== -->
+<div id="modal-escolher" class="hidden fixed inset-0 z-[85] bg-black/85 flex items-center justify-center p-4">
+  <div class="modal-card w-full max-w-md bg-brand-card border border-brand-border rounded-2xl p-4 space-y-2 max-h-[85vh] overflow-y-auto">
+    <div class="font-black text-sm mb-1">Esse código aparece em mais de um item — escolha qual:</div>
+    <div id="lista-escolher"></div>
+    <button id="btn-cancelar-escolher" class="w-full min-h-[42px] rounded-xl bg-transparent border border-brand-border font-bold text-xs text-slate-400 mt-1">Cancelar</button>
+  </div>
+</div>
+
+<!-- ===================== TOASTS ===================== -->
+<div id="toast-box" class="fixed z-[999] left-1/2 -translate-x-1/2 top-3 w-[92%] max-w-sm space-y-2 pointer-events-none"></div>
+
+<script>
+(function(){
+'use strict';
+
+/* =========================================================================
+ * CONFIGURAÇÃO
+ * =======================================================================*/
+
+// Projeto Firebase dedicado do Picking (separacao-mkt).
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyAy_kn95sGaUfjp8xU9AGiyHWMRUfbMUcY",
+  authDomain: "separacao-mkt.firebaseapp.com",
+  databaseURL: "https://separacao-mkt-default-rtdb.firebaseio.com",
+  projectId: "separacao-mkt",
+  storageBucket: "separacao-mkt.firebasestorage.app",
+  messagingSenderId: "245074138581",
+  appId: "1:245074138581:web:4c99629916fc2f2477195c"
+};
+
+const ROOT = 'vesco_picking';
+const PATH_FILA = `${ROOT}/fila`;
+const PATH_IMPORT = `${ROOT}/importacoes`;
+const PATH_PAUSAR = `${ROOT}/pausarAnuncios`;
+
+const GALPOES = ['Galpão 1', 'Galpão 2', 'Galpão 3'];
+
+// PIN client-side apenas para reduzir acesso casual à aba "Pausar Anúncios".
+// Isso NÃO é segurança de verdade — para produção, restrinja por Firebase Auth + regras server-side.
+const SUPERVISOR_PIN = '2026';
+
+/* =========================================================================
+ * ESTADO
+ * =======================================================================*/
+
+const $ = id => document.getElementById(id);
+
+function safeGet(kind, key){ try{ return (kind==='session'?window.sessionStorage:window.localStorage).getItem(key); }catch(_){ return null; } }
+function safeSet(kind, key, val){ try{ (kind==='session'?window.sessionStorage:window.localStorage).setItem(key, val); }catch(_){} }
+
+const state = {
+  fila: {},          // id -> item
+  importacoes: {},
+  pausar: {},
+  operador: JSON.parse(safeGet('local', 'picking_operador') || 'null'),
+  galpaoFiltro: safeGet('local', 'picking_galpao_filtro') || 'todos',
+  pdfRows: [],
+  scanTarget: null,   // 'busca' | 'local' | null
+  itemAtual: null,    // item aberto no modal de confirmação
+  html5: null,
+  nativeStream: null,
+  nativeDetector: null,
+  nativeTimer: null,
+  facingMode: 'environment',
+  lastScan: { code: '', at: 0 },
+  prevFilaSnapshot: {}
+};
+
+function uid(){ return 'op_' + Math.random().toString(36).slice(2, 9); }
+function nowTs(){ return Date.now(); }
+function esc(v){ return String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c])); }
+function normalizeCode(v){ return String(v ?? '').trim().toUpperCase().replace(/\s+/g,''); }
+function fmtQty(n){ const v = Number(n||0); return Number.isInteger(v) ? String(v) : v.toFixed(2).replace(/\.?0+$/,''); }
+
+/* =========================================================================
+ * TOASTS
+ * =======================================================================*/
+
+function toast(msg, type = 'info'){
+  const box = $('toast-box');
+  const colors = {
+    info:  'bg-sky-500/15 border-sky-500/40 text-sky-200',
+    ok:    'bg-emerald-500/15 border-emerald-500/40 text-emerald-200',
+    warn:  'bg-yellow-500/15 border-yellow-500/40 text-yellow-200',
+    error: 'bg-red-500/15 border-red-500/40 text-red-200'
+  };
+  const el = document.createElement('div');
+  el.className = `toast-enter pointer-events-auto border rounded-xl px-3 py-2.5 text-xs font-bold shadow-lg backdrop-blur ${colors[type]||colors.info}`;
+  el.textContent = msg;
+  box.appendChild(el);
+  setTimeout(()=>{ el.style.opacity='0'; el.style.transform='translateY(-6px)'; el.style.transition='all .25s'; setTimeout(()=>el.remove(), 260); }, 3200);
+}
+
+function vibrate(ms){ try{ if(navigator.vibrate) navigator.vibrate(ms); }catch(_){} }
+
+/* =========================================================================
+ * FIREBASE
+ * =======================================================================*/
+
+let db = null;
+
+function initFirebase(){
+  const app = firebase.apps.length ? firebase.app() : firebase.initializeApp(FIREBASE_CONFIG);
+  db = firebase.database(app);
+
+  db.ref('.info/connected').on('value', snap => {
+    const ok = !!snap.val();
+    $('conn-dot').className = 'w-1.5 h-1.5 rounded-full ' + (ok ? 'bg-brand-green' : 'bg-brand-red');
+    $('conn-txt').textContent = ok ? 'online' : 'sem conexão';
+  });
+
+  db.ref(PATH_FILA).on('value', snap => {
+    const next = snap.val() || {};
+    detectAndNotifyTransitions(state.fila, next);
+    state.fila = next;
+    renderAll();
+  });
+
+  db.ref(PATH_IMPORT).limitToLast(15).on('value', snap => {
+    state.importacoes = snap.val() || {};
+    renderImportacoes();
+  });
+
+  db.ref(PATH_PAUSAR).on('value', snap => {
+    state.pausar = snap.val() || {};
+    renderPausar();
+  });
+}
+
+function detectAndNotifyTransitions(prev, next){
+  Object.keys(next).forEach(id => {
+    const before = prev[id];
+    const after = next[id];
+    if(!before || before.status === after.status) return;
+    if(after.status === 'revisao'){
+      toast(`⚠ ${after.sku} não encontrado — enviado para Revisão`, 'warn');
+    }
+    if(after.status === 'falta_definitiva'){
+      toast(`🚫 ${after.sku} — Falta Definitiva. Pausar Anúncios avisado.`, 'error');
+    }
+    if(after.status === 'separado'){
+      toast(`✔ ${after.sku} separado (${after.operadorSeparou || ''})`, 'ok');
+    }
+  });
+}
+
+/* =========================================================================
+ * OPERADOR / GALPÃO
+ * =======================================================================*/
+
+function fillGalpaoSelects(){
+  const sel = $('sel-galpao');
+  GALPOES.forEach(g => { const o=document.createElement('option'); o.value=g; o.textContent=g; sel.appendChild(o); });
+  sel.value = state.galpaoFiltro;
+
+  const selOp = $('input-operador-galpao');
+  GALPOES.forEach(g => { const o=document.createElement('option'); o.value=g; o.textContent=g; selOp.appendChild(o); });
+}
+
+function ensureOperador(){
+  if(state.operador && state.operador.nome){
+    $('operador-nome').textContent = state.operador.nome;
+    return;
+  }
+  $('modal-operador').classList.remove('hidden');
+}
+
+$('btn-operador').addEventListener('click', () => $('modal-operador').classList.remove('hidden'));
+
+$('btn-salvar-operador').addEventListener('click', () => {
+  const nome = $('input-operador-nome').value.trim();
+  const galpao = $('input-operador-galpao').value;
+  if(!nome){ toast('Digite seu nome', 'warn'); return; }
+  state.operador = { id: (state.operador && state.operador.id) || uid(), nome, galpao };
+  safeSet('local', 'picking_operador', JSON.stringify(state.operador));
+  $('operador-nome').textContent = nome;
+  $('modal-operador').classList.add('hidden');
+  toast(`Bem-vindo, ${nome}!`, 'ok');
+});
+
+$('sel-galpao').addEventListener('change', e => {
+  state.galpaoFiltro = e.target.value;
+  safeSet('local', 'picking_galpao_filtro', state.galpaoFiltro);
+  renderFila();
+});
+
+/* =========================================================================
+ * TABS
+ * =======================================================================*/
+
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+});
+
+function switchTab(tab){
+  document.querySelectorAll('.view-panel').forEach(v => v.classList.add('hidden'));
+  $('view-' + tab).classList.remove('hidden');
+  document.querySelectorAll('.tab-btn').forEach(b => {
+    const active = b.dataset.tab === tab;
+    b.className = 'tab-btn min-h-[38px] rounded-xl text-[11px] font-black ' +
+      (active ? 'bg-brand-orange text-black' : 'bg-brand-card text-slate-300 border border-brand-border');
+  });
+  $('fab-bipar').classList.toggle('hidden', tab === 'importar' || tab === 'pausar');
+}
+
+/* =========================================================================
+ * RENDER: FILA / REVISÃO
+ * =======================================================================*/
+
+function itemsArray(){
+  return Object.entries(state.fila).map(([id, v]) => ({ id, ...v }));
+}
+
+function renderAll(){
+  renderKpis();
+  renderFila();
+  renderRevisao();
+  renderPausar();
+}
+
+function renderKpis(){
+  const arr = itemsArray();
+  $('kpi-pendentes').textContent = arr.filter(i => i.status === 'pendente').length;
+  const revisao = arr.filter(i => i.status === 'revisao').length;
+  $('kpi-revisao').textContent = revisao;
+  $('kpi-separados').textContent = arr.filter(i => i.status === 'separado').length;
+  $('kpi-faltando').textContent = arr.filter(i => i.status === 'falta_definitiva').length;
+  const badge = $('badge-revisao');
+  if(revisao > 0){ badge.textContent = revisao; badge.classList.remove('hidden'); }
+  else badge.classList.add('hidden');
+}
+
+function passaGalpao(item){
+  return state.galpaoFiltro === 'todos' || item.galpao === state.galpaoFiltro;
+}
+
+function itemCardHtml(item){
+  const statusTag = {
+    pendente: '',
+    revisao: '<span class="tag-pill bg-yellow-500/15 text-yellow-300 border border-yellow-500/30">Revisão</span>',
+    separado: '<span class="tag-pill bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">Separado</span>',
+    falta_definitiva: '<span class="tag-pill bg-red-500/15 text-red-300 border border-red-500/30">Falta definitiva</span>'
+  }[item.status] || '';
+
+  const origem = item.localizacaoOrigem ? `<span class="text-orange-300">📍 ${esc(item.localizacaoOrigem)}</span> · ` : '';
+
+  return `
+  <div class="bg-brand-card border ${item.status==='revisao' ? 'border-brand-yellow/50' : 'border-brand-border'} rounded-xl p-3 flex items-center justify-between gap-2" data-item-id="${item.id}">
+    <div class="min-w-0">
+      <div class="flex items-center gap-1.5 flex-wrap">
+        <span class="font-black text-sm">${esc(item.sku)}</span>
+        ${statusTag}
+      </div>
+      <div class="text-[11px] text-slate-400 truncate">${esc(item.descricao||'')}</div>
+      <div class="text-[10px] text-slate-500 mt-0.5">${origem}${esc(item.identificacao||'Sem identificação')} · ${esc(item.galpao||'--')} · Qtd ${fmtQty(item.qtdPedida)}</div>
+    </div>
+    <button class="btn-abrir-item shrink-0 min-h-[40px] px-3 rounded-xl bg-brand-blue text-black font-black text-xs">Abrir</button>
+  </div>`;
+}
+
+function renderFila(){
+  const arr = itemsArray().filter(i => (i.status === 'pendente' || i.status === 'revisao') && passaGalpao(i));
+  arr.sort((a,b) => (a.status==='revisao'?0:1) - (b.status==='revisao'?0:1) || (a.criadoEm||0)-(b.criadoEm||0));
+  const box = $('lista-fila');
+  if(!arr.length){
+    box.innerHTML = `<div class="text-center text-slate-500 text-xs border border-dashed border-brand-border rounded-xl p-6">Nenhum item pendente. Importe um PDF de separação.</div>`;
+  } else {
+    box.innerHTML = arr.map(i => itemCardHtml(i)).join('');
+  }
+  bindOpenButtons(box);
+}
+
+function renderRevisao(){
+  const arr = itemsArray().filter(i => i.status === 'revisao' && passaGalpao(i));
+  const box = $('lista-revisao');
+  if(!arr.length){
+    box.innerHTML = `<div class="text-center text-slate-500 text-xs border border-dashed border-brand-border rounded-xl p-6">Nenhum item em revisão no momento.</div>`;
+  } else {
+    box.innerHTML = arr.map(i => itemCardHtml(i)).join('');
+  }
+  bindOpenButtons(box);
+}
+
+function bindOpenButtons(box){
+  box.querySelectorAll('.btn-abrir-item').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.closest('[data-item-id]').dataset.itemId;
+      openConfirmModal(state.fila[id] ? { id, ...state.fila[id] } : null);
+    });
+  });
+}
+
+/* =========================================================================
+ * BUSCA / BIPAGEM MANUAL
+ * =======================================================================*/
+
+$('busca-manual').addEventListener('keydown', e => {
+  if(e.key !== 'Enter') return;
+  e.preventDefault();
+  handleScannedCode(e.currentTarget.value);
+  e.currentTarget.value = '';
+});
+
+function itemMatchesCode(item, code){
+  if(normalizeCode(item.sku) === code) return true;
+  const alt = item.codigosAlternativos;
+  if(Array.isArray(alt)) return alt.some(c => normalizeCode(c) === code);
+  return false;
+}
+
+function handleScannedCode(raw){
+  const code = normalizeCode(raw);
+  if(!code) return;
+  if(!state.operador){ ensureOperador(); return; }
+
+  const matches = itemsArray().filter(i =>
+    itemMatchesCode(i, code) &&
+    (i.status === 'pendente' || i.status === 'revisao') &&
+    passaGalpao(i)
+  );
+
+  if(matches.length === 0){
+    toast(`Código "${code}" não está na fila de separação${state.galpaoFiltro!=='todos' ? ' (' + state.galpaoFiltro + ')' : ''}.`, 'error');
+    vibrate([40,60,40]);
+    return;
+  }
+  vibrate(70);
+  if(matches.length === 1){ openConfirmModal(matches[0]); return; }
+  openEscolherModal(matches);
+}
+
+/* =========================================================================
+ * MODAL: ESCOLHER ENTRE VÁRIOS ITENS
+ * =======================================================================*/
+
+function openEscolherModal(matches){
+  const box = $('lista-escolher');
+  box.innerHTML = matches.map(m => `
+    <button class="btn-escolher w-full text-left bg-brand-card2 border border-brand-border rounded-xl p-3 mb-2" data-item-id="${m.id}">
+      <div class="font-black text-sm">${esc(m.sku)} — ${esc(m.identificacao||'Sem identificação')}</div>
+      <div class="text-[11px] text-slate-400">${esc(m.descricao||'')}</div>
+      <div class="text-[10px] text-slate-500">${esc(m.galpao||'--')} · Qtd ${fmtQty(m.qtdPedida)}</div>
+    </button>`).join('');
+  box.querySelectorAll('.btn-escolher').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.itemId;
+      $('modal-escolher').classList.add('hidden');
+      openConfirmModal(matches.find(m => m.id === id));
+    });
+  });
+  $('modal-escolher').classList.remove('hidden');
+}
+$('btn-cancelar-escolher').addEventListener('click', () => $('modal-escolher').classList.add('hidden'));
+
+/* =========================================================================
+ * MODAL: CONFIRMAR SEPARAÇÃO
+ * =======================================================================*/
+
+function openConfirmModal(item){
+  if(!item) return;
+  state.itemAtual = item;
+  $('conf-sku').textContent = item.sku;
+  $('conf-descricao').textContent = item.descricao || '';
+  $('conf-pedido').textContent = item.identificacao || 'Sem identificação';
+  $('conf-galpao').textContent = item.galpao || '--';
+  $('conf-status-tag').classList.toggle('hidden', item.status !== 'revisao');
+  const origemEl = $('conf-origem');
+  if(item.localizacaoOrigem){ origemEl.textContent = '📍 Buscar em: ' + item.localizacaoOrigem; origemEl.classList.remove('hidden'); }
+  else origemEl.classList.add('hidden');
+  $('conf-qtd-pedida').textContent = fmtQty(item.qtdPedida);
+  $('conf-qtd').value = fmtQty(Math.max(0, Number(item.qtdPedida||0) - Number(item.qtdSeparada||0)));
+  $('conf-local').value = item.localFisico || '';
+  $('modal-confirmar').classList.remove('hidden');
+}
+
+$('btn-cancelar-confirmar').addEventListener('click', () => {
+  $('modal-confirmar').classList.add('hidden');
+  state.itemAtual = null;
+});
+
+$('btn-confirmar-separacao').addEventListener('click', async () => {
+  const item = state.itemAtual;
+  if(!item || !state.operador) return;
+  const qtd = Number($('conf-qtd').value || 0);
+  const local = $('conf-local').value.trim();
+  if(qtd <= 0){ toast('Informe a quantidade separada', 'warn'); return; }
+  if(!local){ toast('Informe o local físico', 'warn'); return; }
+
+  const ref = db.ref(`${PATH_FILA}/${item.id}`);
+  try {
+    const result = await ref.transaction(cur => {
+      if(!cur) return cur;
+      if(cur.status !== 'pendente' && cur.status !== 'revisao') return; // abortar: outro operador já mexeu
+      cur.status = 'separado';
+      cur.qtdSeparada = qtd;
+      cur.localFisico = local;
+      cur.operadorSeparou = state.operador.nome;
+      cur.dataHoraSeparado = nowTs();
+      cur.atualizadoEm = nowTs();
+      return cur;
+    });
+    if(!result.committed){
+      toast('Este item já foi atualizado por outro operador.', 'warn');
+    } else {
+      toast(`✔ ${item.sku} separado com sucesso`, 'ok');
+      vibrate(90);
+    }
+  } catch(e){
+    toast('Erro ao salvar: ' + (e.message||e), 'error');
+  }
+  $('modal-confirmar').classList.add('hidden');
+  state.itemAtual = null;
+});
+
+$('btn-nao-encontrado').addEventListener('click', async () => {
+  const item = state.itemAtual;
+  if(!item || !state.operador) return;
+  const ref = db.ref(`${PATH_FILA}/${item.id}`);
+  let finalStatus = null;
+  try {
+    const result = await ref.transaction(cur => {
+      if(!cur) return cur;
+      if(cur.status === 'pendente'){
+        cur.status = 'revisao';
+        cur.revisaoMotivo = 'Não encontrado';
+        cur.revisaoOperador1 = state.operador.nome;
+        cur.revisaoTs1 = nowTs();
+        cur.atualizadoEm = nowTs();
+        return cur;
+      }
+      if(cur.status === 'revisao'){
+        cur.status = 'falta_definitiva';
+        cur.revisaoOperador2 = state.operador.nome;
+        cur.revisaoTs2 = nowTs();
+        cur.atualizadoEm = nowTs();
+        return cur;
+      }
+      return; // outro status: aborta
+    });
+    if(result.committed){
+      finalStatus = result.snapshot.val() && result.snapshot.val().status;
+    } else {
+      toast('Este item já foi atualizado por outro operador.', 'warn');
+    }
+  } catch(e){
+    toast('Erro ao salvar: ' + (e.message||e), 'error');
+  }
+
+  if(finalStatus === 'revisao'){
+    toast(`${item.sku} marcado para Revisão`, 'warn');
+  } else if(finalStatus === 'falta_definitiva'){
+    await db.ref(`${PATH_PAUSAR}/${item.id}`).set({
+      sku: item.sku,
+      descricao: item.descricao || '',
+      identificacao: item.identificacao || '',
+      galpao: item.galpao || '',
+      motivo: 'Falta definitiva confirmada por dois operadores',
+      operador1: item.revisaoOperador1 || '',
+      operador2: state.operador.nome,
+      status: 'aberto',
+      criadoEm: nowTs()
+    });
+    toast(`🚫 ${item.sku}: Falta Definitiva — equipe de e-commerce avisada`, 'error');
+    vibrate([60,80,60,80]);
+  }
+
+  $('modal-confirmar').classList.add('hidden');
+  state.itemAtual = null;
+});
+
+/* =========================================================================
+ * PAUSAR ANÚNCIOS (aba restrita)
+ * =======================================================================*/
+
+$('btn-pin').addEventListener('click', () => {
+  if($('pin-input').value.trim() === SUPERVISOR_PIN){
+    $('pausar-locked').classList.add('hidden');
+    $('pausar-content').classList.remove('hidden');
+    safeSet('session', 'picking_pin_ok', '1');
+  } else {
+    toast('PIN incorreto', 'error');
+  }
+});
+if(safeGet('session', 'picking_pin_ok') === '1'){
+  $('pausar-locked').classList.add('hidden');
+  $('pausar-content').classList.remove('hidden');
+}
+
+function renderPausar(){
+  const arr = Object.entries(state.pausar).map(([id,v]) => ({id, ...v})).filter(i => i.status === 'aberto');
+  arr.sort((a,b)=> (b.criadoEm||0)-(a.criadoEm||0));
+  const box = $('lista-pausar');
+  if(!arr.length){
+    box.innerHTML = `<div class="text-center text-slate-500 text-xs border border-dashed border-brand-border rounded-xl p-6">Nenhum produto em falta no momento.</div>`;
+  } else {
+    box.innerHTML = arr.map(i => `
+      <div class="bg-brand-card border border-brand-red/40 rounded-xl p-3" data-pausar-id="${i.id}">
+        <div class="font-black text-sm">${esc(i.sku)}</div>
+        <div class="text-[11px] text-slate-400">${esc(i.descricao||'')}</div>
+        <div class="text-[10px] text-slate-500 mt-1">${esc(i.identificacao||'--')} · ${esc(i.galpao||'--')}</div>
+        <div class="text-[10px] text-slate-500">Confirmado por ${esc(i.operador1||'--')} e ${esc(i.operador2||'--')}</div>
+        <button class="btn-repor mt-2 w-full min-h-[38px] rounded-xl bg-brand-green text-black font-black text-xs">Marcar como reposto</button>
+      </div>`).join('');
+    box.querySelectorAll('.btn-repor').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const id = btn.closest('[data-pausar-id]').dataset.pausarId;
+        await db.ref(`${PATH_PAUSAR}/${id}`).update({ status: 'reposto', repostoEm: nowTs(), repostoPor: state.operador ? state.operador.nome : '' });
+        toast('Marcado como reposto', 'ok');
+      });
+    });
+  }
+}
+
+/* =========================================================================
+ * IMPORTAR PDF
+ * =======================================================================*/
+
+if(window.pdfjsLib){
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://unpkg.com/pdfjs-dist@3.11.174/legacy/build/pdf.worker.min.js';
+}
+
+$('input-pdf').addEventListener('change', async e => {
+  const file = e.target.files[0];
+  e.target.value = '';
+  if(!file) return;
+  $('pdf-status').textContent = 'Lendo PDF...';
+  try {
+    const rows = await extractRowsFromPdf(file);
+    if(!rows.length){
+      $('pdf-status').textContent = 'Não consegui identificar itens automaticamente. Adicione as linhas manualmente abaixo.';
+    } else {
+      $('pdf-status').textContent = `${rows.length} item(ns) identificado(s). Revise antes de enviar.`;
+    }
+    state.pdfRows = rows.length ? rows : [emptyPdfRow()];
+    renderPdfPreview();
+    $('pdf-preview-wrap').classList.remove('hidden');
+  } catch(err){
+    $('pdf-status').textContent = 'Erro ao ler o PDF: ' + (err.message || err);
+  }
+});
+
+function emptyPdfRow(){
+  return { sku:'', descricao:'', quantidade:1, galpao: GALPOES[0], localizacaoOrigem:'', codigosAlternativos:[] };
+}
+
+async function extractRowsFromPdf(file){
+  const buf = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+  let fullText = '';
+  for(let p = 1; p <= pdf.numPages; p++){
+    const page = await pdf.getPage(p);
+    const content = await page.getTextContent();
+    // Reagrupa por linha usando a posição Y de cada fragmento de texto
+    // (o pdf.js não preserva colunas de tabela, só a ordem de leitura).
+    const lines = {};
+    content.items.forEach(it => {
+      const y = Math.round(it.transform[5]);
+      (lines[y] = lines[y] || []).push(it.str);
+    });
+    const orderedY = Object.keys(lines).map(Number).sort((a,b)=>b-a);
+    fullText += orderedY.map(y => lines[y].join(' ')).join('\n') + '\n';
+  }
+  return parseSeparationText(fullText);
+}
+
+/*
+ * Calibrado para o layout real do Tiny/Olist "Separação de mercadorias":
+ *   Produto | Cód. (SKU/GTIN) | Qtd. | Un. | Localização | Anotações
+ *
+ * Cada item pode ocupar de 2 a 4 linhas de texto extraído:
+ *   - 1 a 3 linhas com o nome do produto (quebra automática)
+ *   - 1 linha "solta" com um código (SKU interno OU GTIN) — opcional, só existe
+ *     quando o produto tem dois códigos empilhados na célula
+ *   - 1 linha final contendo: [restante do nome ou código] + quantidade + unidade + [localização]
+ *
+ * Ex. real do PDF:
+ *   "Algicida De Choque Eliminador De Algas 1"
+ *   "Litro - Genco"
+ *   "7896544400047"
+ *   "17896544401560 1,00 Un C3-4C"
+ *
+ *   "VÁLVULA PUMP ROSCA 28 - PRETO 7898202123072403 10,00 UN"   <- tudo em 1 linha só
+ */
+function parseSeparationText(text){
+  const rawLines = text.split('\n').map(l => l.trim()).filter(Boolean);
+
+  const reHeaderNoise = /^(Produto\b|Cód\.|Qtd\.|Un\.|Localiza|Anota|Separa[cç][ãa]o de mercadorias|P[aá]gina\s+\d)/i;
+  // A quantidade do Tiny/Olist sempre vem em formato brasileiro "N,NN" (ex: "1,00", "12,00").
+  // Ancorar só nesse padrão (em vez de qualquer número) evita casar com pedaços de
+  // palavras da própria descrição do produto, tipo "270Ml", "8X300 Mts" ou "300 M".
+  const reAnchor = /^(.*?)\s+(\d{1,5},\d{2})\s+(Un|UN|Und|UND|Unid|UNID|PC|PCS|Pç|CX|Cx|KG|Kg|Dz|DZ|Cj|CJ)\b\.?\s*(.*)$/;
+  const reBareCode = /^[0-9A-Za-z][0-9A-Za-z.\-]{4,30}$/;
+  const reTrailingCodeInName = /^(.+?)\s+(\d{8,20})$/;
+
+  const items = [];
+  let nameBuffer = [];
+  let codeBuffer = [];
+
+  function flushDangling(){
+    // Descarta nome/códigos acumulados sem uma linha de quantidade correspondente
+    // (normalmente rodapé/observações no fim do PDF).
+    nameBuffer = [];
+    codeBuffer = [];
+  }
+
+  for(const line of rawLines){
+    if(reHeaderNoise.test(line)) continue;
+
+    const mAnchor = line.match(reAnchor);
+    if(mAnchor && mAnchor[2] && mAnchor[3]){
+      const leading = mAnchor[1].trim();
+      const qty = parseFloat(mAnchor[2].replace(',', '.')) || 0;
+      const localizacao = (mAnchor[4] || '').trim();
+
+      let code2 = '';
+      let extraName = '';
+      if(leading){
+        const tailMatch = leading.match(/^(.*?)(?:\s+)?([0-9A-Za-z][0-9A-Za-z.\-]{5,30})$/);
+        if(tailMatch && /\d{4,}/.test(tailMatch[2])){
+          extraName = tailMatch[1].trim();
+          code2 = tailMatch[2];
+        } else {
+          extraName = leading;
+        }
+      }
+      if(extraName) nameBuffer.push(extraName);
+
+      const codes = [...codeBuffer];
+      if(code2) codes.push(code2);
+
+      const descricao = nameBuffer.join(' ').replace(/\s+/g, ' ').trim();
+      const sku = codes[codes.length - 1] || '';
+
+      if(sku || descricao){
+        items.push({
+          sku,
+          codigosAlternativos: [...new Set(codes)],
+          descricao,
+          quantidade: qty || 1,
+          localizacaoOrigem: localizacao,
+          galpao: GALPOES[0]
+        });
+      }
+      nameBuffer = [];
+      codeBuffer = [];
+      continue;
+    }
+
+    if(reBareCode.test(line) && /\d{4,}/.test(line)){
+      codeBuffer.push(line);
+      continue;
+    }
+
+    const mTrailing = line.match(reTrailingCodeInName);
+    if(mTrailing){
+      nameBuffer.push(mTrailing[1].trim());
+      codeBuffer.push(mTrailing[2]);
+      continue;
+    }
+
+    nameBuffer.push(line);
+  }
+  flushDangling();
+
+  // Remove duplicadas idênticas.
+  const seen = new Set();
+  return items.filter(r => {
+    const key = r.sku + '|' + r.quantidade + '|' + r.descricao;
+    if(seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function renderPdfPreview(){
+  $('pdf-count').textContent = state.pdfRows.length;
+  const box = $('pdf-preview-list');
+  box.innerHTML = state.pdfRows.map((r, idx) => `
+    <div class="bg-brand-card2 border border-brand-border rounded-xl p-2 space-y-1.5" data-row="${idx}">
+      <div class="grid grid-cols-12 gap-1.5 items-center">
+        <input class="f-sku col-span-3 bg-black/40 border border-brand-border rounded-lg px-2 py-2 text-xs font-black" placeholder="SKU" value="${esc(r.sku)}">
+        <input class="f-desc col-span-5 bg-black/40 border border-brand-border rounded-lg px-2 py-2 text-xs" placeholder="Descrição" value="${esc(r.descricao)}">
+        <input class="f-qtd col-span-2 bg-black/40 border border-brand-border rounded-lg px-2 py-2 text-xs text-center" type="number" step="0.01" placeholder="Qtd" value="${esc(r.quantidade)}">
+        <select class="f-galpao col-span-1 bg-black/40 border border-brand-border rounded-lg px-1 py-2 text-[10px]">
+          ${GALPOES.map(g => `<option ${g===r.galpao?'selected':''}>${esc(g)}</option>`).join('')}
+        </select>
+        <button class="f-del col-span-1 text-red-400 text-xs font-black">✕</button>
+      </div>
+      ${r.localizacaoOrigem ? `<div class="text-[10px] text-orange-300 pl-1">📍 origem no PDF: ${esc(r.localizacaoOrigem)}</div>` : ''}
+      ${(r.codigosAlternativos && r.codigosAlternativos.length > 1) ? `<div class="text-[10px] text-slate-500 pl-1">códigos: ${r.codigosAlternativos.map(esc).join(' · ')}</div>` : ''}
+    </div>`).join('');
+
+  box.querySelectorAll('[data-row]').forEach(row => {
+    const idx = Number(row.dataset.row);
+    row.querySelector('.f-sku').addEventListener('input', e => state.pdfRows[idx].sku = e.target.value);
+    row.querySelector('.f-desc').addEventListener('input', e => state.pdfRows[idx].descricao = e.target.value);
+    row.querySelector('.f-qtd').addEventListener('input', e => state.pdfRows[idx].quantidade = e.target.value);
+    row.querySelector('.f-galpao').addEventListener('change', e => state.pdfRows[idx].galpao = e.target.value);
+    row.querySelector('.f-del').addEventListener('click', () => { state.pdfRows.splice(idx,1); renderPdfPreview(); });
+  });
+}
+
+$('btn-add-row').addEventListener('click', () => { state.pdfRows.push(emptyPdfRow()); renderPdfPreview(); });
+
+$('btn-cancelar-import').addEventListener('click', () => {
+  state.pdfRows = [];
+  $('pdf-preview-wrap').classList.add('hidden');
+  $('pdf-status').textContent = '';
+  $('pdf-identificacao').value = '';
+});
+
+$('btn-confirmar-import').addEventListener('click', async () => {
+  const rows = state.pdfRows.filter(r => String(r.sku).trim());
+  if(!rows.length){ toast('Nenhum item válido para importar', 'warn'); return; }
+  const identificacao = $('pdf-identificacao').value.trim();
+
+  const importRef = db.ref(PATH_IMPORT).push();
+  const importId = importRef.key;
+  await importRef.set({
+    arquivo: 'importação PDF',
+    identificacao,
+    totalItens: rows.length,
+    operador: state.operador ? state.operador.nome : '',
+    criadoEm: nowTs()
+  });
+
+  const updates = {};
+  rows.forEach(r => {
+    const itemRef = db.ref(PATH_FILA).push();
+    updates[itemRef.key] = {
+      sku: String(r.sku).trim().toUpperCase(),
+      codigosAlternativos: Array.isArray(r.codigosAlternativos) ? r.codigosAlternativos.map(c => String(c).toUpperCase()) : [],
+      descricao: String(r.descricao||'').trim(),
+      qtdPedida: Number(r.quantidade) || 1,
+      qtdSeparada: 0,
+      identificacao,
+      localizacaoOrigem: String(r.localizacaoOrigem||'').trim(),
+      galpao: r.galpao || GALPOES[0],
+      status: 'pendente',
+      importId,
+      criadoEm: nowTs(),
+      atualizadoEm: nowTs()
+    };
+  });
+  await db.ref(PATH_FILA).update(updates);
+
+  toast(`${rows.length} item(ns) enviados para a fila`, 'ok');
+  state.pdfRows = [];
+  $('pdf-preview-wrap').classList.add('hidden');
+  $('pdf-status').textContent = '';
+  $('pdf-identificacao').value = '';
+  switchTab('fila');
+});
+
+function renderImportacoes(){
+  const arr = Object.entries(state.importacoes).map(([id,v]) => ({id, ...v}));
+  arr.sort((a,b) => (b.criadoEm||0)-(a.criadoEm||0));
+  const box = $('lista-importacoes');
+  if(!arr.length){
+    box.innerHTML = `<div class="text-center text-slate-500 text-xs border border-dashed border-brand-border rounded-xl p-4">Nenhuma importação ainda.</div>`;
+    return;
+  }
+  box.innerHTML = arr.map(i => `
+    <div class="bg-brand-card border border-brand-border rounded-xl p-2.5 flex items-center justify-between">
+      <div>
+        <div class="text-xs font-bold">${esc(i.identificacao || 'Sem identificação')} · ${esc(i.totalItens||0)} itens · ${esc(i.operador||'--')}</div>
+        <div class="text-[10px] text-slate-500">${i.criadoEm ? new Date(i.criadoEm).toLocaleString('pt-BR') : ''}</div>
+      </div>
+    </div>`).join('');
+}
+
+/* =========================================================================
+ * CÂMERA (QR / código de barras)
+ * iOS: html5-qrcode (mais confiável no Safari). Android/desktop: BarcodeDetector
+ * nativo primeiro (mais rápido), com fallback para html5-qrcode e foto.
+ * =======================================================================*/
+
+function isIOS(){
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+
+function cameraSetStatus(txt){ $('camera-status').textContent = txt || ''; }
+
+$('fab-bipar').addEventListener('click', () => {
+  if(!state.operador){ ensureOperador(); return; }
+  openCamera('busca');
+});
+$('btn-bipar-local').addEventListener('click', () => openCamera('local'));
+$('btn-fechar-camera').addEventListener('click', () => closeCamera(true));
+$('btn-foto-camera').addEventListener('click', () => $('input-foto-camera').click());
+$('btn-flip-camera').addEventListener('click', async () => {
+  state.facingMode = state.facingMode === 'environment' ? 'user' : 'environment';
+  const t = state.scanTarget;
+  await closeCamera(false);
+  await openCamera(t);
+});
+
+$('input-foto-camera').addEventListener('change', async e => {
+  const file = e.target.files[0];
+  e.target.value = '';
+  if(!file) return;
+  await decodeImageFile(file);
+});
+
+async function openCamera(target){
+  state.scanTarget = target;
+  $('camera-context').textContent = target === 'local' ? 'Aponte para o código do local físico' : 'Aponte para o código do produto';
+  $('modal-camera').classList.remove('hidden');
+  cameraSetStatus('Preparando leitor...');
+
+  try {
+    if(isIOS()){
+      const ok = await startHtml5Live();
+      if(!ok) cameraSetStatus('Leitor não carregou no iOS. Use "Tirar foto do código".');
+      return;
+    }
+    try {
+      cameraSetStatus('Solicitando permissão da câmera...');
+      const ok = await startNativeGetUserMedia();
+      if(ok) return;
+    } catch(_){ await stopNativeOnly(); }
+
+    const ok2 = await startHtml5Live();
+    if(!ok2) cameraSetStatus('Não foi possível abrir a câmera. Use "Tirar foto do código".');
+  } catch(err){
+    cameraSetStatus('Erro ao abrir câmera: ' + (err.message||err));
+  }
+}
+
+async function startNativeGetUserMedia(){
+  const video = $('camera-video');
+  $('camera-region').classList.add('hidden');
+  video.classList.remove('hidden');
+  if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return false;
+  const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: state.facingMode }, width:{ideal:1280}, height:{ideal:720} }, audio:false });
+  state.nativeStream = stream;
+  video.srcObject = stream;
+  await video.play();
+  if(!('BarcodeDetector' in window)) throw new Error('BarcodeDetector indisponível');
+  let formats = ['qr_code','code_128','code_39','code_93','ean_13','ean_8','itf','codabar','data_matrix','pdf417','upc_a','upc_e'];
+  if(window.BarcodeDetector.getSupportedFormats){
+    const supported = await window.BarcodeDetector.getSupportedFormats();
+    formats = formats.filter(f => supported.includes(f));
+  }
+  state.nativeDetector = new BarcodeDetector({ formats: formats.length ? formats : undefined });
+  cameraSetStatus('Câmera ativa. Centralize o código no retângulo.');
+  const tick = async () => {
+    if(!state.nativeDetector) return;
+    try {
+      const codes = await state.nativeDetector.detect(video);
+      if(codes && codes.length){ onCameraCode(codes[0].rawValue || ''); return; }
+    } catch(_){}
+    state.nativeTimer = setTimeout(tick, 160);
+  };
+  tick();
+  return true;
+}
+
+async function startHtml5Live(){
+  if(!window.Html5Qrcode) return false;
+  const video = $('camera-video');
+  const region = $('camera-region');
+  video.classList.add('hidden');
+  region.classList.remove('hidden');
+  region.innerHTML = '';
+  const config = {
+    fps: isIOS() ? 8 : 12,
+    qrbox: (w,h) => ({ width: Math.max(220, Math.floor(Math.min(w*.88,420))), height: Math.max(90, Math.floor(Math.min(h*.28,150))) }),
+    aspectRatio: 1.7777778
+  };
+  state.html5 = new Html5Qrcode('camera-region', { verbose:false });
+  cameraSetStatus(isIOS() ? 'iPhone detectado. Carregando leitor compatível...' : 'Carregando leitor...');
+  await state.html5.start({ facingMode: state.facingMode }, config, text => onCameraCode(text), () => {});
+  cameraSetStatus('Câmera ativa. Aproxime o código até preencher o retângulo.');
+  return true;
+}
+
+async function decodeImageFile(file){
+  if(!window.Html5Qrcode){ toast('Leitor de foto não carregado', 'error'); return; }
+  cameraSetStatus('Lendo foto...');
+  let holder = document.getElementById('picking-photo-reader');
+  if(!holder){ holder = document.createElement('div'); holder.id = 'picking-photo-reader'; holder.style.display='none'; document.body.appendChild(holder); }
+  const reader = new Html5Qrcode('picking-photo-reader', { verbose:false });
+  try {
+    const text = await reader.scanFile(file, true);
+    try { await reader.clear(); } catch(_){}
+    onCameraCode(text);
+  } catch(e){
+    toast('Não consegui ler o código da foto. Aproxime mais e tente de novo.', 'error');
+  }
+}
+
+function onCameraCode(raw){
+  const code = normalizeCode(raw);
+  if(!code) return;
+  const now = nowTs();
+  if(state.lastScan.code === code && (now - state.lastScan.at) < 1500) return;
+  state.lastScan = { code, at: now };
+  vibrate(70);
+
+  const target = state.scanTarget;
+  closeCamera(true);
+
+  if(target === 'local'){
+    $('conf-local').value = code;
+    return;
+  }
+  setTimeout(() => handleScannedCode(code), 100);
+}
+
+async function stopNativeOnly(){
+  if(state.nativeTimer){ clearTimeout(state.nativeTimer); state.nativeTimer = null; }
+  state.nativeDetector = null;
+  try { if(state.nativeStream){ state.nativeStream.getTracks().forEach(t=>t.stop()); state.nativeStream = null; } } catch(_){}
+  const video = $('camera-video');
+  if(video) video.srcObject = null;
+}
+
+async function closeCamera(hide){
+  await stopNativeOnly();
+  try { if(state.html5 && state.html5.isScanning) await state.html5.stop(); } catch(_){}
+  try { if(state.html5) await state.html5.clear(); } catch(_){}
+  state.html5 = null;
+  $('camera-region').innerHTML = '';
+  $('camera-region').classList.add('hidden');
+  $('camera-video').classList.remove('hidden');
+  if(hide) $('modal-camera').classList.add('hidden');
+}
+
+/* =========================================================================
+ * BOOT
+ * =======================================================================*/
+
+function boot(){
+  fillGalpaoSelects();
+  ensureOperador();
+  initFirebase();
+  switchTab('fila');
+}
+
+document.addEventListener('DOMContentLoaded', boot);
+})();
+</script>
+</body>
+</html>

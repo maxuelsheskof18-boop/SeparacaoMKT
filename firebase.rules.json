@@ -1,0 +1,39 @@
+{
+  "_comment": "Regras do projeto Firebase dedicado 'separacao-mkt'. Como é um projeto novo e vazio, pode colar o arquivo inteiro em Console Firebase > Realtime Database > Regras.",
+
+  "rules": {
+
+    "vesco_picking": {
+
+      "fila": {
+        "$itemId": {
+          ".read": true,
+          ".write": true,
+          ".validate": "newData.hasChildren(['sku','status','qtdPedida'])",
+          "sku": { ".validate": "newData.isString() && newData.val().length > 0" },
+          "status": { ".validate": "newData.val() === 'pendente' || newData.val() === 'revisao' || newData.val() === 'separado' || newData.val() === 'falta_definitiva'" },
+          "qtdPedida": { ".validate": "newData.isNumber() && newData.val() >= 0" },
+          "qtdSeparada": { ".validate": "newData.isNumber() && newData.val() >= 0" }
+        }
+      },
+
+      "importacoes": {
+        "$importId": {
+          ".read": true,
+          ".write": true
+        }
+      },
+
+      "pausarAnuncios": {
+        "$skuId": {
+          ".read": true,
+          ".write": true
+        }
+      }
+
+    }
+
+  },
+
+  "_producao_recomendado": "Este ruleset é aberto (qualquer pessoa com a URL do banco pode ler/escrever). Antes de ir para produção de verdade, ative Firebase Auth (mesmo que anônimo) e troque '.write': true por checagens de auth.uid, e mova o PIN da aba 'Pausar Anúncios' do cliente (index.html) para uma regra de servidor."
+}
