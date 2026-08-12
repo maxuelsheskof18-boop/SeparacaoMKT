@@ -813,125 +813,104 @@ function emptyPdfRow(){
 async function extractRowsFromPdf(file){
   const buf = await file.arrayBuffer();
   const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
-  let fullText = '';
+  const allItems = [];
   for(let p = 1; p <= pdf.numPages; p++){
     const page = await pdf.getPage(p);
     const content = await page.getTextContent();
-    // Reagrupa por linha usando a posição Y de cada fragmento de texto
-    // (o pdf.js não preserva colunas de tabela, só a ordem de leitura).
-    const lines = {};
     content.items.forEach(it => {
-      const y = Math.round(it.transform[5]);
-      (lines[y] = lines[y] || []).push(it.str);
+      const str = (it.str || '').trim();
+      if(!str) return;
+      allItems.push({ x: it.transform[4], str });
     });
-    const orderedY = Object.keys(lines).map(Number).sort((a,b)=>b-a);
-    fullText += orderedY.map(y => lines[y].join(' ')).join('\n') + '\n';
   }
-  return parseSeparationText(fullText);
+  return parseSeparationItems(allItems);
 }
 
 /*
- * Calibrado para o layout real do Tiny/Olist "Separação de mercadorias":
- *   Produto | Cód. (SKU/GTIN) | Qtd. | Un. | Localização | Anotações
+ * Calibrado com base no texto REAL extraído via pdf.js do layout Tiny/Olist
+ * "Separação de mercadorias" (Produto | Cód. (SKU/GTIN) | Qtd. | Un. | Localização | Anotações).
  *
- * Cada item pode ocupar de 2 a 4 linhas de texto extraído:
- *   - 1 a 3 linhas com o nome do produto (quebra automática)
- *   - 1 linha "solta" com um código (SKU interno OU GTIN) — opcional, só existe
- *     quando o produto tem dois códigos empilhados na célula
- *   - 1 linha final contendo: [restante do nome ou código] + quantidade + unidade + [localização]
- *
- * Ex. real do PDF:
- *   "Algicida De Choque Eliminador De Algas 1"
- *   "Litro - Genco"
- *   "7896544400047"
- *   "17896544401560 1,00 Un C3-4C"
- *
- *   "VÁLVULA PUMP ROSCA 28 - PRETO 7898202123072403 10,00 UN"   <- tudo em 1 linha só
+ * O pdf.js NÃO reconstrói colunas de tabela — cada fragmento de texto vem com sua
+ * própria posição X, e fragmentos da mesma linha visual podem ter Y ligeiramente
+ * diferentes entre colunas (o "Qtd./Un./Localização" fica ~5pt acima do "Código",
+ * por centralização vertical distinta). Por isso NÃO reconstruímos linhas de texto:
+ * classificamos cada fragmento pela sua posição X (a única coisa realmente estável)
+ * e fechamos um item sempre que aparece um novo nome de produto após já termos
+ * capturado a quantidade do item anterior. Também existe uma coluna de ícones de
+ * checkbox (glifos Private Use Area em x≈54-55) que precisa ser ignorada.
  */
-function parseSeparationText(text){
-  const rawLines = text.split('\n').map(l => l.trim()).filter(Boolean);
+const PDF_COL_CHECKBOX_MAX = 100;
+const PDF_COL_PRODUTO_MAX = 200;
+const PDF_COL_CODIGO_MAX = 345;
+const PDF_COL_QTD_MAX = 373;
+const PDF_COL_UN_MAX = 383;
+const PDF_COL_LOCALIZACAO_MAX = 460;
 
-  const reHeaderNoise = /^(Produto\b|Cód\.|Qtd\.|Un\.|Localiza|Anota|Separa[cç][ãa]o de mercadorias|P[aá]gina\s+\d)/i;
-  // A quantidade do Tiny/Olist sempre vem em formato brasileiro "N,NN" (ex: "1,00", "12,00").
-  // Ancorar só nesse padrão (em vez de qualquer número) evita casar com pedaços de
-  // palavras da própria descrição do produto, tipo "270Ml", "8X300 Mts" ou "300 M".
-  const reAnchor = /^(.*?)\s+(\d{1,5},\d{2})\s+(Un|UN|Und|UND|Unid|UNID|PC|PCS|Pç|CX|Cx|KG|Kg|Dz|DZ|Cj|CJ)\b\.?\s*(.*)$/;
-  const reBareCode = /^[0-9A-Za-z][0-9A-Za-z.\-]{4,30}$/;
-  const reTrailingCodeInName = /^(.+?)\s+(\d{8,20})$/;
+const PDF_HEADER_LABELS = new Set([
+  'Produto', 'Cód. (SKU/GTIN)', 'Qtd.', 'Un.', 'Localização', 'Anotações', 'Separação de mercadorias'
+]);
 
-  const items = [];
-  let nameBuffer = [];
-  let codeBuffer = [];
+function pdfColumnFor(x){
+  if(x < PDF_COL_CHECKBOX_MAX) return 'checkbox';
+  if(x < PDF_COL_PRODUTO_MAX) return 'produto';
+  if(x < PDF_COL_CODIGO_MAX) return 'codigo';
+  if(x < PDF_COL_QTD_MAX) return 'qtd';
+  if(x < PDF_COL_UN_MAX) return 'un';
+  if(x < PDF_COL_LOCALIZACAO_MAX) return 'localizacao';
+  return 'anotacoes';
+}
 
-  function flushDangling(){
-    // Descarta nome/códigos acumulados sem uma linha de quantidade correspondente
-    // (normalmente rodapé/observações no fim do PDF).
-    nameBuffer = [];
-    codeBuffer = [];
-  }
+function parseSeparationItems(items){
+  const rows = [];
+  let cur = null;
 
-  for(const line of rawLines){
-    if(reHeaderNoise.test(line)) continue;
+  function blankItem(){ return { nome: [], codigos: [], qtd: '', localizacao: '' }; }
 
-    const mAnchor = line.match(reAnchor);
-    if(mAnchor && mAnchor[2] && mAnchor[3]){
-      const leading = mAnchor[1].trim();
-      const qty = parseFloat(mAnchor[2].replace(',', '.')) || 0;
-      const localizacao = (mAnchor[4] || '').trim();
-
-      let code2 = '';
-      let extraName = '';
-      if(leading){
-        const tailMatch = leading.match(/^(.*?)(?:\s+)?([0-9A-Za-z][0-9A-Za-z.\-]{5,30})$/);
-        if(tailMatch && /\d{4,}/.test(tailMatch[2])){
-          extraName = tailMatch[1].trim();
-          code2 = tailMatch[2];
-        } else {
-          extraName = leading;
-        }
-      }
-      if(extraName) nameBuffer.push(extraName);
-
-      const codes = [...codeBuffer];
-      if(code2) codes.push(code2);
-
-      const descricao = nameBuffer.join(' ').replace(/\s+/g, ' ').trim();
-      const sku = codes[codes.length - 1] || '';
-
+  function flush(){
+    if(cur && (cur.codigos.length || cur.nome.length)){
+      const descricao = cur.nome.join(' ').replace(/\s+/g, ' ').trim();
+      const codigos = [...new Set(cur.codigos)];
+      const sku = codigos[codigos.length - 1] || '';
+      const qty = parseFloat(String(cur.qtd).replace(',', '.')) || 0;
       if(sku || descricao){
-        items.push({
+        rows.push({
           sku,
-          codigosAlternativos: [...new Set(codes)],
+          codigosAlternativos: codigos,
           descricao,
           quantidade: qty || 1,
-          localizacaoOrigem: localizacao,
+          localizacaoOrigem: cur.localizacao,
           galpao: GALPOES[0]
         });
       }
-      nameBuffer = [];
-      codeBuffer = [];
-      continue;
     }
-
-    if(reBareCode.test(line) && /\d{4,}/.test(line)){
-      codeBuffer.push(line);
-      continue;
-    }
-
-    const mTrailing = line.match(reTrailingCodeInName);
-    if(mTrailing){
-      nameBuffer.push(mTrailing[1].trim());
-      codeBuffer.push(mTrailing[2]);
-      continue;
-    }
-
-    nameBuffer.push(line);
+    cur = null;
   }
-  flushDangling();
+
+  for(const it of items){
+    if(PDF_HEADER_LABELS.has(it.str)) continue;
+    const col = pdfColumnFor(it.x);
+
+    if(col === 'produto'){
+      if(cur && cur.qtd) flush();
+      if(!cur) cur = blankItem();
+      cur.nome.push(it.str);
+    } else if(col === 'codigo'){
+      if(!cur) cur = blankItem();
+      cur.codigos.push(it.str);
+    } else if(col === 'qtd'){
+      if(!cur) cur = blankItem();
+      cur.qtd = it.str;
+    } else if(col === 'localizacao'){
+      if(cur) cur.localizacao = it.str;
+    }
+    // 'un' e 'anotacoes' não são usados hoje, mas o item já fica corretamente
+    // isolado por coluna caso precise deles no futuro.
+  }
+  flush();
 
   // Remove duplicadas idênticas.
   const seen = new Set();
-  return items.filter(r => {
+  return rows.filter(r => {
     const key = r.sku + '|' + r.quantidade + '|' + r.descricao;
     if(seen.has(key)) return false;
     seen.add(key);
