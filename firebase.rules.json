@@ -29,6 +29,13 @@
           ".read": true,
           ".write": true
         }
+      },
+
+      "localizacoes": {
+        "$skuKey": {
+          ".read": true,
+          ".write": true
+        }
       }
 
     }

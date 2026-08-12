@@ -231,7 +231,6 @@
       <div id="conf-descricao" class="text-xs text-slate-400 mt-0.5">--</div>
       <div class="flex flex-wrap gap-1.5 mt-2">
         <span id="conf-pedido" class="tag-pill bg-sky-500/10 text-sky-300 border border-sky-500/30">-- </span>
-        <span id="conf-galpao" class="tag-pill bg-slate-500/10 text-slate-300 border border-slate-500/30">Galpão --</span>
         <span id="conf-origem" class="hidden tag-pill bg-orange-500/10 text-orange-300 border border-orange-500/30">📍 Buscar em: --</span>
         <span id="conf-status-tag" class="tag-pill hidden bg-yellow-500/10 text-yellow-300 border border-yellow-500/30">Em revisão</span>
       </div>
@@ -249,11 +248,17 @@
     </div>
 
     <div>
-      <div class="text-[10px] text-slate-500 font-bold uppercase mb-1">Local físico onde o produto foi colocado</div>
+      <div class="text-[10px] text-slate-500 font-bold uppercase mb-1">Galpão</div>
+      <select id="conf-galpao-select" class="w-full bg-black/40 border border-brand-border rounded-xl px-3 py-3 font-bold outline-none"></select>
+    </div>
+
+    <div>
+      <div class="text-[10px] text-slate-500 font-bold uppercase mb-1">Local físico onde o produto foi encontrado/colocado</div>
       <div class="flex gap-2">
         <input id="conf-local" placeholder="Ex: A1-03" class="flex-1 bg-black/40 border border-brand-border rounded-xl px-3 py-3 font-bold outline-none">
         <button id="btn-bipar-local" class="px-3 rounded-xl bg-brand-card2 border border-brand-border font-bold text-xs">📷</button>
       </div>
+      <div id="conf-local-sugerido" class="hidden text-[10px] text-sky-300 mt-1">🕘 Última vez encontrado aqui — confirme se ainda está no lugar</div>
     </div>
 
     <div class="grid grid-cols-1 gap-2 pt-1">
@@ -299,8 +304,9 @@ const ROOT = 'vesco_picking';
 const PATH_FILA = `${ROOT}/fila`;
 const PATH_IMPORT = `${ROOT}/importacoes`;
 const PATH_PAUSAR = `${ROOT}/pausarAnuncios`;
+const PATH_LOCAL = `${ROOT}/localizacoes`;
 
-const GALPOES = ['Galpão 1', 'Galpão 2', 'Galpão 3'];
+const GALPOES = ['Leopoldo', '21 de Abril', 'Cesário'];
 
 // PIN client-side apenas para reduzir acesso casual à aba "Pausar Anúncios".
 // Isso NÃO é segurança de verdade — para produção, restrinja por Firebase Auth + regras server-side.
@@ -319,9 +325,12 @@ const state = {
   fila: {},          // id -> item
   importacoes: {},
   pausar: {},
+  localizacoes: {},  // skuKey -> { sku, localFisico, galpao, atualizadoEm, atualizadoPor }
   operador: JSON.parse(safeGet('local', 'picking_operador') || 'null'),
   galpaoFiltro: safeGet('local', 'picking_galpao_filtro') || 'todos',
   pdfRows: [],
+  pdfFileName: '',
+  pdfFileHash: '',
   scanTarget: null,   // 'busca' | 'local' | null
   itemAtual: null,    // item aberto no modal de confirmação
   html5: null,
@@ -337,6 +346,16 @@ function uid(){ return 'op_' + Math.random().toString(36).slice(2, 9); }
 function nowTs(){ return Date.now(); }
 function esc(v){ return String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c])); }
 function normalizeCode(v){ return String(v ?? '').trim().toUpperCase().replace(/\s+/g,''); }
+function skuKey(v){ const n = normalizeCode(v).replace(/[.#$/\[\]]/g, '_'); return n || ('sku_' + Date.now()); }
+
+function lookupLocationMemory(sku, alternates){
+  const codes = [sku, ...(Array.isArray(alternates) ? alternates : [])].filter(Boolean);
+  for(const c of codes){
+    const mem = state.localizacoes[skuKey(c)];
+    if(mem) return mem;
+  }
+  return null;
+}
 function fmtQty(n){ const v = Number(n||0); return Number.isInteger(v) ? String(v) : v.toFixed(2).replace(/\.?0+$/,''); }
 
 /* =========================================================================
@@ -392,6 +411,10 @@ function initFirebase(){
     state.pausar = snap.val() || {};
     renderPausar();
   });
+
+  db.ref(PATH_LOCAL).on('value', snap => {
+    state.localizacoes = snap.val() || {};
+  });
 }
 
 function detectAndNotifyTransitions(prev, next){
@@ -422,6 +445,9 @@ function fillGalpaoSelects(){
 
   const selOp = $('input-operador-galpao');
   GALPOES.forEach(g => { const o=document.createElement('option'); o.value=g; o.textContent=g; selOp.appendChild(o); });
+
+  const selConf = $('conf-galpao-select');
+  GALPOES.forEach(g => { const o=document.createElement('option'); o.value=g; o.textContent=g; selConf.appendChild(o); });
 }
 
 function ensureOperador(){
@@ -629,14 +655,21 @@ function openConfirmModal(item){
   $('conf-sku').textContent = item.sku;
   $('conf-descricao').textContent = item.descricao || '';
   $('conf-pedido').textContent = item.identificacao || 'Sem identificação';
-  $('conf-galpao').textContent = item.galpao || '--';
   $('conf-status-tag').classList.toggle('hidden', item.status !== 'revisao');
   const origemEl = $('conf-origem');
   if(item.localizacaoOrigem){ origemEl.textContent = '📍 Buscar em: ' + item.localizacaoOrigem; origemEl.classList.remove('hidden'); }
   else origemEl.classList.add('hidden');
   $('conf-qtd-pedida').textContent = fmtQty(item.qtdPedida);
   $('conf-qtd').value = fmtQty(Math.max(0, Number(item.qtdPedida||0) - Number(item.qtdSeparada||0)));
-  $('conf-local').value = item.localFisico || '';
+
+  // Memória de localização: se esse SKU já foi separado antes, usa o último
+  // galpão/local conhecido como ponto de partida (o operador pode corrigir).
+  const memoria = lookupLocationMemory(item.sku, item.codigosAlternativos);
+  $('conf-galpao-select').value = item.galpao || (memoria && memoria.galpao) || GALPOES[0];
+  const localPreenchido = item.localFisico || item.localFisicoSugerido || (memoria && memoria.localFisico) || '';
+  $('conf-local').value = localPreenchido;
+  $('conf-local-sugerido').classList.toggle('hidden', !localPreenchido || !!item.localFisico);
+
   $('modal-confirmar').classList.remove('hidden');
 }
 
@@ -650,6 +683,7 @@ $('btn-confirmar-separacao').addEventListener('click', async () => {
   if(!item || !state.operador) return;
   const qtd = Number($('conf-qtd').value || 0);
   const local = $('conf-local').value.trim();
+  const galpaoEscolhido = $('conf-galpao-select').value || GALPOES[0];
   if(qtd <= 0){ toast('Informe a quantidade separada', 'warn'); return; }
   if(!local){ toast('Informe o local físico', 'warn'); return; }
 
@@ -661,6 +695,7 @@ $('btn-confirmar-separacao').addEventListener('click', async () => {
       cur.status = 'separado';
       cur.qtdSeparada = qtd;
       cur.localFisico = local;
+      cur.galpao = galpaoEscolhido;
       cur.operadorSeparou = state.operador.nome;
       cur.dataHoraSeparado = nowTs();
       cur.atualizadoEm = nowTs();
@@ -669,6 +704,14 @@ $('btn-confirmar-separacao').addEventListener('click', async () => {
     if(!result.committed){
       toast('Este item já foi atualizado por outro operador.', 'warn');
     } else {
+      // Memoriza onde esse SKU foi encontrado, para a próxima importação já sugerir.
+      await db.ref(`${PATH_LOCAL}/${skuKey(item.sku)}`).set({
+        sku: item.sku,
+        localFisico: local,
+        galpao: galpaoEscolhido,
+        atualizadoEm: nowTs(),
+        atualizadoPor: state.operador.nome
+      });
       toast(`✔ ${item.sku} separado com sucesso`, 'ok');
       vibrate(90);
     }
@@ -786,17 +829,63 @@ if(window.pdfjsLib){
   pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://unpkg.com/pdfjs-dist@3.11.174/legacy/build/pdf.worker.min.js';
 }
 
+async function sha256Hex(buf){
+  try{
+    if(!window.crypto || !window.crypto.subtle) return '';
+    const hashBuf = await crypto.subtle.digest('SHA-256', buf);
+    return Array.from(new Uint8Array(hashBuf)).map(b => b.toString(16).padStart(2,'0')).join('');
+  }catch(_){ return ''; }
+}
+
 $('input-pdf').addEventListener('change', async e => {
   const file = e.target.files[0];
   e.target.value = '';
   if(!file) return;
+
+  $('pdf-status').textContent = 'Verificando se esse PDF já foi importado...';
+  const buf = await file.arrayBuffer();
+  const hash = await sha256Hex(buf);
+  state.pdfFileName = file.name;
+  state.pdfFileHash = hash;
+
+  if(hash){
+    const dup = Object.values(state.importacoes).find(imp => imp.hashArquivo === hash && imp.status !== 'removido');
+    if(dup){
+      const quando = dup.criadoEm ? new Date(dup.criadoEm).toLocaleString('pt-BR') : '';
+      const seguir = confirm(
+        `Esse PDF já foi importado${quando ? ' em ' + quando : ''} por ${dup.operador || '--'} ` +
+        `(${dup.totalItens || 0} itens) e ainda está ativo na fila.\n\n` +
+        `Importar de novo pode DUPLICAR os itens na fila de separação.\n\n` +
+        `Se quiser reimportar, use "Remover" nessa importação antiga primeiro.\n\n` +
+        `Deseja importar mesmo assim?`
+      );
+      if(!seguir){
+        $('pdf-status').textContent = 'Importação cancelada — esse PDF já está ativo na fila.';
+        return;
+      }
+    }
+  }
+
   $('pdf-status').textContent = 'Lendo PDF...';
   try {
-    const rows = await extractRowsFromPdf(file);
+    const rows = await extractRowsFromPdfBuffer(buf);
+
+    // Se esse SKU já foi separado antes, puxa o último galpão/local conhecido
+    // em vez de deixar no galpão padrão.
+    let memorizados = 0;
+    rows.forEach(r => {
+      const mem = lookupLocationMemory(r.sku, r.codigosAlternativos);
+      if(mem){
+        memorizados++;
+        r.galpao = mem.galpao || r.galpao;
+        r.localFisicoSugerido = mem.localFisico || '';
+      }
+    });
+
     if(!rows.length){
       $('pdf-status').textContent = 'Não consegui identificar itens automaticamente. Adicione as linhas manualmente abaixo.';
     } else {
-      $('pdf-status').textContent = `${rows.length} item(ns) identificado(s). Revise antes de enviar.`;
+      $('pdf-status').textContent = `${rows.length} item(ns) identificado(s)${memorizados ? `, ${memorizados} com localização já conhecida` : ''}. Revise antes de enviar.`;
     }
     state.pdfRows = rows.length ? rows : [emptyPdfRow()];
     renderPdfPreview();
@@ -807,11 +896,10 @@ $('input-pdf').addEventListener('change', async e => {
 });
 
 function emptyPdfRow(){
-  return { sku:'', descricao:'', quantidade:1, galpao: GALPOES[0], localizacaoOrigem:'', codigosAlternativos:[] };
+  return { sku:'', descricao:'', quantidade:1, galpao: GALPOES[0], localizacaoOrigem:'', localFisicoSugerido:'', codigosAlternativos:[] };
 }
 
-async function extractRowsFromPdf(file){
-  const buf = await file.arrayBuffer();
+async function extractRowsFromPdfBuffer(buf){
   const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
   const allItems = [];
   for(let p = 1; p <= pdf.numPages; p++){
@@ -933,6 +1021,7 @@ function renderPdfPreview(){
         <button class="f-del col-span-1 text-red-400 text-xs font-black">✕</button>
       </div>
       ${r.localizacaoOrigem ? `<div class="text-[10px] text-orange-300 pl-1">📍 origem no PDF: ${esc(r.localizacaoOrigem)}</div>` : ''}
+      ${r.localFisicoSugerido ? `<div class="text-[10px] text-sky-300 pl-1">🕘 última vez encontrado em: ${esc(r.localFisicoSugerido)} (${esc(r.galpao)})</div>` : ''}
       ${(r.codigosAlternativos && r.codigosAlternativos.length > 1) ? `<div class="text-[10px] text-slate-500 pl-1">códigos: ${r.codigosAlternativos.map(esc).join(' · ')}</div>` : ''}
     </div>`).join('');
 
@@ -950,6 +1039,8 @@ $('btn-add-row').addEventListener('click', () => { state.pdfRows.push(emptyPdfRo
 
 $('btn-cancelar-import').addEventListener('click', () => {
   state.pdfRows = [];
+  state.pdfFileName = '';
+  state.pdfFileHash = '';
   $('pdf-preview-wrap').classList.add('hidden');
   $('pdf-status').textContent = '';
   $('pdf-identificacao').value = '';
@@ -963,7 +1054,9 @@ $('btn-confirmar-import').addEventListener('click', async () => {
   const importRef = db.ref(PATH_IMPORT).push();
   const importId = importRef.key;
   await importRef.set({
-    arquivo: 'importação PDF',
+    arquivo: state.pdfFileName || 'importação PDF',
+    hashArquivo: state.pdfFileHash || '',
+    status: 'ativo',
     identificacao,
     totalItens: rows.length,
     operador: state.operador ? state.operador.nome : '',
@@ -981,6 +1074,7 @@ $('btn-confirmar-import').addEventListener('click', async () => {
       qtdSeparada: 0,
       identificacao,
       localizacaoOrigem: String(r.localizacaoOrigem||'').trim(),
+      localFisicoSugerido: String(r.localFisicoSugerido||'').trim(),
       galpao: r.galpao || GALPOES[0],
       status: 'pendente',
       importId,
@@ -992,6 +1086,8 @@ $('btn-confirmar-import').addEventListener('click', async () => {
 
   toast(`${rows.length} item(ns) enviados para a fila`, 'ok');
   state.pdfRows = [];
+  state.pdfFileName = '';
+  state.pdfFileHash = '';
   $('pdf-preview-wrap').classList.add('hidden');
   $('pdf-status').textContent = '';
   $('pdf-identificacao').value = '';
@@ -999,20 +1095,53 @@ $('btn-confirmar-import').addEventListener('click', async () => {
 });
 
 function renderImportacoes(){
-  const arr = Object.entries(state.importacoes).map(([id,v]) => ({id, ...v}));
+  const arr = Object.entries(state.importacoes).map(([id,v]) => ({id, ...v})).filter(i => i.status !== 'removido');
   arr.sort((a,b) => (b.criadoEm||0)-(a.criadoEm||0));
   const box = $('lista-importacoes');
   if(!arr.length){
     box.innerHTML = `<div class="text-center text-slate-500 text-xs border border-dashed border-brand-border rounded-xl p-4">Nenhuma importação ainda.</div>`;
     return;
   }
-  box.innerHTML = arr.map(i => `
-    <div class="bg-brand-card border border-brand-border rounded-xl p-2.5 flex items-center justify-between">
-      <div>
-        <div class="text-xs font-bold">${esc(i.identificacao || 'Sem identificação')} · ${esc(i.totalItens||0)} itens · ${esc(i.operador||'--')}</div>
+  box.innerHTML = arr.map(i => {
+    const itensImport = itemsArray().filter(it => it.importId === i.id);
+    const pendentes = itensImport.filter(it => it.status === 'pendente' || it.status === 'revisao').length;
+    const separados = itensImport.filter(it => it.status === 'separado').length;
+    const faltando = itensImport.filter(it => it.status === 'falta_definitiva').length;
+    return `
+    <div class="bg-brand-card border border-brand-border rounded-xl p-2.5 flex items-center justify-between gap-2" data-import-id="${i.id}">
+      <div class="min-w-0">
+        <div class="text-xs font-bold truncate">${esc(i.identificacao || 'Sem identificação')} · ${esc(i.totalItens||0)} itens · ${esc(i.operador||'--')}</div>
         <div class="text-[10px] text-slate-500">${i.criadoEm ? new Date(i.criadoEm).toLocaleString('pt-BR') : ''}</div>
+        <div class="text-[10px] text-slate-500 mt-0.5">${pendentes} pendente(s) · ${separados} separado(s) · ${faltando} falta(s)</div>
       </div>
-    </div>`).join('');
+      <button class="btn-remover-import shrink-0 text-[10px] font-black text-red-300 bg-red-500/10 border border-red-500/40 rounded-lg px-2.5 py-2">Remover</button>
+    </div>`;
+  }).join('');
+
+  box.querySelectorAll('.btn-remover-import').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id = btn.closest('[data-import-id]').dataset.importId;
+      const imp = state.importacoes[id];
+      if(!imp) return;
+      const itensImport = itemsArray().filter(it => it.importId === id);
+      const pendentes = itensImport.filter(it => it.status === 'pendente' || it.status === 'revisao');
+      const outros = itensImport.length - pendentes.length;
+
+      const msg = `Remover esta importação (${itensImport.length} item(ns))?\n\n` +
+        `${pendentes.length} item(ns) pendente(s)/em revisão serão removidos da fila.` +
+        (outros > 0 ? `\n${outros} item(ns) já separado(s) ou com falta definitiva serão MANTIDOS como histórico.` : '') +
+        `\n\nDepois de remover, o mesmo PDF pode ser importado de novo sem aviso de duplicidade.`;
+      if(!confirm(msg)) return;
+
+      const updates = {};
+      pendentes.forEach(it => { updates[`${PATH_FILA}/${it.id}`] = null; });
+      updates[`${PATH_IMPORT}/${id}/status`] = 'removido';
+      updates[`${PATH_IMPORT}/${id}/removidoEm`] = nowTs();
+      updates[`${PATH_IMPORT}/${id}/removidoPor`] = state.operador ? state.operador.nome : '';
+      await db.ref().update(updates);
+      toast('Importação removida', 'ok');
+    });
+  });
 }
 
 /* =========================================================================
