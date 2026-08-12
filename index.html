@@ -168,7 +168,7 @@
     <div id="pausar-locked" class="bg-brand-card border border-brand-border rounded-xl p-4 text-center space-y-2">
       <div class="text-2xl">🔒</div>
       <div class="font-black text-sm">Área restrita — Equipe de e-commerce / Supervisão</div>
-      <input id="pin-input" type="password" inputmode="numeric" placeholder="PIN de acesso"
+      <input id="pin-input" type="password" placeholder="PIN de acesso"
         class="w-full bg-black/40 border border-brand-border rounded-xl px-3 py-3 text-center font-black tracking-widest outline-none">
       <button id="btn-pin" class="w-full min-h-[44px] rounded-xl bg-brand-orange text-black font-black text-sm">Entrar</button>
     </div>
@@ -304,7 +304,7 @@ const GALPOES = ['Galpão 1', 'Galpão 2', 'Galpão 3'];
 
 // PIN client-side apenas para reduzir acesso casual à aba "Pausar Anúncios".
 // Isso NÃO é segurança de verdade — para produção, restrinja por Firebase Auth + regras server-side.
-const SUPERVISOR_PIN = '2026';
+const SUPERVISOR_PIN = 'Vesco@2026';
 
 /* =========================================================================
  * ESTADO
