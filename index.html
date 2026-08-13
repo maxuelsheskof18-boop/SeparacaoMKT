@@ -444,6 +444,16 @@ function liberarLock(item){
 }
 function esc(v){ return String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c])); }
 function normalizeCode(v){ return String(v ?? '').trim().toUpperCase().replace(/\s+/g,''); }
+
+// Algumas etiquetas de fornecedor/logística usam QR estruturado tipo
+// "CODMAT=4606491601;CODORDEM=253061;SEQORDEM=0001" em vez de um código
+// simples — nesse caso o que interessa pra bater com o SKU é só o CODMAT.
+// Se não encontrar esse padrão, devolve null e quem chamou usa o valor bruto.
+function extrairCodMatDeQr(raw){
+  const str = String(raw || '');
+  const m = str.match(/CODMAT\s*=\s*([^;]+)/i);
+  return m ? m[1].trim() : null;
+}
 function skuKey(v){ const n = normalizeCode(v).replace(/[.#$/\[\]]/g, '_'); return n || ('sku_' + Date.now()); }
 
 function lookupLocationMemory(sku, alternates){
@@ -749,7 +759,7 @@ function itemMatchesCode(item, code){
 }
 
 function handleScannedCode(raw){
-  const code = normalizeCode(raw);
+  const code = normalizeCode(extrairCodMatDeQr(raw) || raw);
   if(!code) return;
   if(!state.operador){ ensureOperador(); return; }
 
@@ -1893,7 +1903,7 @@ async function decodeImageFile(file){
 }
 
 function onCameraCode(raw){
-  const code = normalizeCode(raw);
+  const code = normalizeCode(extrairCodMatDeQr(raw) || raw);
   if(!code) return;
   const now = nowTs();
   if(state.lastScan.code === code && (now - state.lastScan.at) < 1500) return;
