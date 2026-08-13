@@ -1833,7 +1833,8 @@ async function startHtml5Live(){
   region.classList.remove('hidden');
   region.innerHTML = '';
   const config = {
-    fps: isIOS() ? 8 : 12,
+    fps: isIOS() ? 15 : 12,
+    disableFlip: true,
     qrbox: (w,h) => ({ width: Math.max(240, Math.floor(Math.min(w*.9,460))), height: Math.max(160, Math.floor(Math.min(h*.5,320))) }),
     aspectRatio: 1.7777778
   };
