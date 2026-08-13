@@ -81,11 +81,13 @@
   </div>
 
   <!-- Tabs -->
-  <nav class="max-w-lg mx-auto px-3 pb-2 grid grid-cols-4 gap-1.5">
-    <button data-tab="fila" class="tab-btn min-h-[38px] rounded-xl text-[11px] font-black bg-brand-orange text-black">Fila</button>
-    <button data-tab="revisao" class="tab-btn min-h-[38px] rounded-xl text-[11px] font-black bg-brand-card text-slate-300 border border-brand-border">Revisão <span id="badge-revisao" class="hidden ml-1 bg-brand-yellow text-black rounded-full px-1.5">0</span></button>
-    <button data-tab="importar" class="tab-btn min-h-[38px] rounded-xl text-[11px] font-black bg-brand-card text-slate-300 border border-brand-border">Importar</button>
-    <button data-tab="pausar" class="tab-btn min-h-[38px] rounded-xl text-[11px] font-black bg-brand-card text-slate-300 border border-brand-border">🔒 Anúncios</button>
+  <nav class="max-w-lg mx-auto px-3 pb-2 flex gap-1.5 overflow-x-auto" style="scrollbar-width:none">
+    <button data-tab="fila" class="tab-btn shrink-0 min-h-[38px] px-3 rounded-xl text-[11px] font-black bg-brand-orange text-black">Fila</button>
+    <button data-tab="revisao" class="tab-btn shrink-0 min-h-[38px] px-3 rounded-xl text-[11px] font-black bg-brand-card text-slate-300 border border-brand-border">Revisão <span id="badge-revisao" class="hidden ml-1 bg-brand-yellow text-black rounded-full px-1.5">0</span></button>
+    <button data-tab="importar" class="tab-btn shrink-0 min-h-[38px] px-3 rounded-xl text-[11px] font-black bg-brand-card text-slate-300 border border-brand-border">Importar</button>
+    <button data-tab="produtividade" class="tab-btn shrink-0 min-h-[38px] px-3 rounded-xl text-[11px] font-black bg-brand-card text-slate-300 border border-brand-border">📊 Produtividade</button>
+    <button data-tab="sobras" class="tab-btn shrink-0 min-h-[38px] px-3 rounded-xl text-[11px] font-black bg-brand-card text-slate-300 border border-brand-border">📦 Sobras</button>
+    <button data-tab="pausar" class="tab-btn shrink-0 min-h-[38px] px-3 rounded-xl text-[11px] font-black bg-brand-card text-slate-300 border border-brand-border">🔒 Anúncios</button>
   </nav>
 </header>
 
@@ -163,6 +165,68 @@
     </div>
   </section>
 
+  <!-- ============ VIEW: PRODUTIVIDADE ============ -->
+  <section id="view-produtividade" class="view-panel hidden space-y-3">
+    <div class="grid grid-cols-2 gap-1.5">
+      <button id="btn-prod-hoje" class="prod-periodo-btn min-h-[38px] rounded-xl text-[11px] font-black bg-brand-orange text-black">Hoje</button>
+      <button id="btn-prod-mes" class="prod-periodo-btn min-h-[38px] rounded-xl text-[11px] font-black bg-brand-card text-slate-300 border border-brand-border">Por mês</button>
+    </div>
+    <input id="prod-mes-input" type="month" class="hidden w-full bg-brand-card border border-brand-border rounded-xl px-3 py-2.5 font-bold outline-none">
+
+    <div id="lista-produtividade" class="space-y-2"></div>
+
+    <div class="bg-brand-card border border-brand-border rounded-xl p-3 text-[10px] text-slate-500 leading-relaxed">
+      <b class="text-slate-400">Como funciona a penalidade:</b> quando um operador marca "Não Encontrado" e depois <b>outro</b> operador acha e separa o mesmo item, isso conta como uma penalidade para quem disse que não tinha. Corrigir seu próprio "Não Encontrado" não gera penalidade.
+    </div>
+  </section>
+
+  <!-- ============ VIEW: SOBRAS ============ -->
+  <section id="view-sobras" class="view-panel hidden space-y-3">
+    <div class="bg-brand-card border border-brand-border rounded-xl p-3">
+      <div class="text-[10px] text-slate-500 font-bold uppercase mb-1">Registrar sobra — bipe o SKU já separado</div>
+      <div class="flex gap-2">
+        <input id="sobra-sku" placeholder="SKU do produto separado" class="flex-1 bg-black/40 border border-brand-border rounded-xl px-3 py-3 font-black outline-none">
+        <button id="btn-buscar-sobra" class="px-4 rounded-xl bg-brand-blue text-black font-black text-xs">Buscar</button>
+      </div>
+    </div>
+    <div id="sobra-busca-resultado"></div>
+
+    <div>
+      <div class="font-black text-sm mb-1.5">Sobras registradas</div>
+      <div id="lista-sobras" class="space-y-2"></div>
+    </div>
+  </section>
+
+  <!-- ============ MODAL: REGISTRAR SOBRA ============ -->
+  <div id="modal-sobra" class="hidden fixed inset-0 z-[85] bg-black/85 flex items-end sm:items-center justify-center p-2">
+    <div class="modal-card w-full max-w-md bg-brand-card border border-brand-border rounded-2xl p-4 space-y-3 max-h-[92vh] overflow-y-auto">
+      <div>
+        <div class="text-[10px] text-slate-500 font-bold uppercase">SKU separado</div>
+        <div id="sobra-modal-sku" class="text-lg font-black">--</div>
+        <div id="sobra-modal-descricao" class="text-xs text-slate-400 mt-0.5">--</div>
+      </div>
+      <div>
+        <div class="text-[10px] text-slate-500 font-bold uppercase mb-1">Por que não foi embalado?</div>
+        <select id="sobra-motivo" class="w-full bg-black/40 border border-brand-border rounded-xl px-3 py-3 font-bold outline-none">
+          <option value="Pedido cancelado">Pedido cancelado</option>
+          <option value="Item errado separado">Item errado separado</option>
+          <option value="Avariado / danificado">Avariado / danificado</option>
+          <option value="Pedido alterado pelo cliente">Pedido alterado pelo cliente</option>
+          <option value="Separou a mais (excedente)">Separou a mais (excedente)</option>
+          <option value="Outro">Outro</option>
+        </select>
+      </div>
+      <div>
+        <div class="text-[10px] text-slate-500 font-bold uppercase mb-1">Observação (opcional)</div>
+        <textarea id="sobra-obs" rows="2" class="w-full bg-black/40 border border-brand-border rounded-xl px-3 py-2.5 outline-none"></textarea>
+      </div>
+      <div class="grid grid-cols-1 gap-2 pt-1">
+        <button id="btn-confirmar-sobra" class="min-h-[48px] rounded-xl bg-brand-orange text-black font-black text-sm">✔ Registrar sobra</button>
+        <button id="btn-cancelar-sobra" class="min-h-[42px] rounded-xl bg-transparent border border-brand-border font-bold text-xs text-slate-400">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ============ VIEW: PAUSAR ANÚNCIOS (restrita) ============ -->
   <section id="view-pausar" class="view-panel hidden space-y-2">
     <div id="pausar-locked" class="bg-brand-card border border-brand-border rounded-xl p-4 text-center space-y-2">
@@ -225,6 +289,7 @@
 <!-- ===================== MODAL: CONFIRMAR SEPARAÇÃO ===================== -->
 <div id="modal-confirmar" class="hidden fixed inset-0 z-[85] bg-black/85 flex items-end sm:items-center justify-center p-2">
   <div class="modal-card w-full max-w-md bg-brand-card border border-brand-border rounded-2xl p-4 space-y-3 max-h-[92vh] overflow-y-auto">
+    <img id="conf-foto" class="hidden w-full max-h-52 object-contain rounded-xl bg-black/30 border border-brand-border" alt="Foto do produto">
     <div>
       <div class="text-[10px] text-slate-500 font-bold uppercase">SKU</div>
       <div id="conf-sku" class="text-lg font-black">--</div>
@@ -233,6 +298,11 @@
         <span id="conf-pedido" class="tag-pill bg-sky-500/10 text-sky-300 border border-sky-500/30">-- </span>
         <span id="conf-origem" class="hidden tag-pill bg-orange-500/10 text-orange-300 border border-orange-500/30">📍 Buscar em: --</span>
         <span id="conf-status-tag" class="tag-pill hidden bg-yellow-500/10 text-yellow-300 border border-yellow-500/30">Em revisão</span>
+      </div>
+      <div id="conf-estoque-locais" class="hidden text-[10px] text-emerald-300 mt-1">🏭 Estoque informou: --</div>
+      <div id="conf-pedidos-agrupados" class="hidden bg-sky-500/10 border border-sky-500/30 rounded-xl p-2 mt-2">
+        <div class="text-[10px] text-sky-300 font-bold uppercase mb-1">🔗 Quantidade unificada de vários pedidos</div>
+        <div id="conf-pedidos-lista" class="text-[11px] text-sky-100 space-y-0.5"></div>
       </div>
     </div>
 
@@ -312,6 +382,12 @@ const GALPOES = ['Leopoldo', '21 de Abril', 'Cesário'];
 // Isso NÃO é segurança de verdade — para produção, restrinja por Firebase Auth + regras server-side.
 const SUPERVISOR_PIN = 'Vesco@2026';
 
+// URL do App da Web do projeto "vesco-estoque-app" (Google Apps Script), depois
+// de implantado. Ex: "https://script.google.com/macros/s/AKfycb.../exec".
+// Enquanto ficar vazio, o Picking usa só a memória própria (Firebase) para
+// sugerir localização — o Controle de Estoque é opcional e não bloqueia nada.
+const ESTOQUE_API_URL = 'https://script.google.com/macros/s/AKfycbwpxupsuLeD2Luo1GjbCItZI3hQTrXdXJv5SCfNSUTr9m9eQqiEgksJ5SrEQY7QwaQo/exec';
+
 /* =========================================================================
  * ESTADO
  * =======================================================================*/
@@ -344,6 +420,27 @@ const state = {
 
 function uid(){ return 'op_' + Math.random().toString(36).slice(2, 9); }
 function nowTs(){ return Date.now(); }
+
+// "Trava" leve para avisar em tempo real que outro operador já abriu esse
+// item — não impede fisicamente (a transaction no confirmar já garante que só
+// um vence), mas evita que dois operadores percam tempo preenchendo o mesmo
+// item ao mesmo tempo sem saber. Expira sozinha depois de um tempo, caso
+// alguém feche o app/aba sem cancelar.
+const LOCK_TIMEOUT_MS = 3 * 60 * 1000;
+
+function isLockAtivo(item){
+  return !!(item && item.emSeparacaoPor && item.emSeparacaoDesde && (nowTs() - item.emSeparacaoDesde) < LOCK_TIMEOUT_MS);
+}
+
+function travarItem(item){
+  if(!item || !item.id || !state.operador) return;
+  db.ref(`${PATH_FILA}/${item.id}`).update({ emSeparacaoPor: state.operador.nome, emSeparacaoDesde: nowTs() }).catch(()=>{});
+}
+
+function liberarLock(item){
+  if(!item || !item.id) return;
+  db.ref(`${PATH_FILA}/${item.id}`).update({ emSeparacaoPor: null, emSeparacaoDesde: null }).catch(()=>{});
+}
 function esc(v){ return String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c])); }
 function normalizeCode(v){ return String(v ?? '').trim().toUpperCase().replace(/\s+/g,''); }
 function skuKey(v){ const n = normalizeCode(v).replace(/[.#$/\[\]]/g, '_'); return n || ('sku_' + Date.now()); }
@@ -356,6 +453,38 @@ function lookupLocationMemory(sku, alternates){
   }
   return null;
 }
+
+// Extrai galpão + local do primeiro trecho do texto "Locais" que o Controle de
+// Estoque devolve (ex: "Leopoldo - A1-03 (5) | Cesário - B2-07 (3)"). Só serve
+// como um "melhor palpite" pra pré-preencher o formulário — o texto completo
+// continua sendo mostrado, caso o estoque esteja espalhado em mais de um lugar.
+function primeiroLocalDoTexto(texto){
+  if(!texto) return null;
+  const primeiro = String(texto).split('|')[0].trim();
+  const semQtd = primeiro.replace(/\s*\(\d+(?:[.,]\d+)?\)\s*$/, '').trim();
+  const partes = semQtd.split(' - ');
+  if(partes.length < 2) return null;
+  return { galpao: partes[0].trim(), local: partes.slice(1).join(' - ').trim() };
+}
+
+// Consulta em lote o Controle de Estoque (projeto separado, planilha Google
+// Sheets) para saber onde cada SKU já foi registrado pelo time de estoque.
+// Falha em silêncio (sem quebrar a importação) se a URL não estiver configurada
+// ou o serviço estiver fora do ar — nesse caso só sobra a memória do Firebase.
+async function fetchEstoqueLocalizacoes(skus){
+  if(!ESTOQUE_API_URL || !skus.length) return {};
+  try{
+    const url = `${ESTOQUE_API_URL}?action=localizacaoLote&skus=${encodeURIComponent(skus.join(','))}`;
+    const resp = await fetch(url);
+    if(!resp.ok) throw new Error('HTTP ' + resp.status);
+    const data = await resp.json();
+    return (data && data.resultados) || {};
+  }catch(err){
+    console.warn('Controle de Estoque indisponível para consulta de localização:', err);
+    return {};
+  }
+}
+
 function fmtQty(n){ const v = Number(n||0); return Number.isInteger(v) ? String(v) : v.toFixed(2).replace(/\.?0+$/,''); }
 
 /* =========================================================================
@@ -431,6 +560,9 @@ function detectAndNotifyTransitions(prev, next){
     if(after.status === 'separado'){
       toast(`✔ ${after.sku} separado (${after.operadorSeparou || ''})`, 'ok');
     }
+    if(after.status === 'separado' && after.penalidadeAplicada && (!before || !before.penalidadeAplicada)){
+      toast(`⚠ Penalidade: ${after.penalidadeOperador} disse "Não Encontrado" no SKU ${after.sku}, mas ${after.penalidadeEncontradoPor} achou depois.`, 'warn');
+    }
   });
 }
 
@@ -490,10 +622,12 @@ function switchTab(tab){
   $('view-' + tab).classList.remove('hidden');
   document.querySelectorAll('.tab-btn').forEach(b => {
     const active = b.dataset.tab === tab;
-    b.className = 'tab-btn min-h-[38px] rounded-xl text-[11px] font-black ' +
+    b.className = 'tab-btn shrink-0 min-h-[38px] px-3 rounded-xl text-[11px] font-black ' +
       (active ? 'bg-brand-orange text-black' : 'bg-brand-card text-slate-300 border border-brand-border');
   });
-  $('fab-bipar').classList.toggle('hidden', tab === 'importar' || tab === 'pausar');
+  $('fab-bipar').classList.toggle('hidden', tab === 'importar' || tab === 'pausar' || tab === 'produtividade' || tab === 'sobras');
+  if(tab === 'produtividade') renderProdutividade();
+  if(tab === 'sobras') renderSobras();
 }
 
 /* =========================================================================
@@ -509,6 +643,8 @@ function renderAll(){
   renderFila();
   renderRevisao();
   renderPausar();
+  if(!$('view-produtividade').classList.contains('hidden')) renderProdutividade();
+  if(!$('view-sobras').classList.contains('hidden')) renderSobras();
 }
 
 function renderKpis(){
@@ -536,16 +672,26 @@ function itemCardHtml(item){
   }[item.status] || '';
 
   const origem = item.localizacaoOrigem ? `<span class="text-orange-300">📍 ${esc(item.localizacaoOrigem)}</span> · ` : '';
+  const foto = item.foto ? `<img src="${esc(item.foto)}" class="w-11 h-11 rounded-lg object-cover bg-black/30 border border-brand-border shrink-0" alt="">` : '';
+  const nPedidos = Array.isArray(item.pedidosAgrupados) ? item.pedidosAgrupados.length : 1;
+  const grupo = nPedidos > 1 ? `<span class="tag-pill bg-sky-500/15 text-sky-300 border border-sky-500/30">🔗 ${nPedidos} pedidos</span>` : '';
+  const lockOutro = isLockAtivo(item) && item.emSeparacaoPor !== (state.operador && state.operador.nome);
+  const lock = lockOutro ? `<span class="tag-pill bg-purple-500/15 text-purple-300 border border-purple-500/30">🔒 ${esc(item.emSeparacaoPor)}</span>` : '';
 
   return `
   <div class="bg-brand-card border ${item.status==='revisao' ? 'border-brand-yellow/50' : 'border-brand-border'} rounded-xl p-3 flex items-center justify-between gap-2" data-item-id="${item.id}">
-    <div class="min-w-0">
-      <div class="flex items-center gap-1.5 flex-wrap">
-        <span class="font-black text-sm">${esc(item.sku)}</span>
-        ${statusTag}
+    <div class="flex items-center gap-2 min-w-0">
+      ${foto}
+      <div class="min-w-0">
+        <div class="flex items-center gap-1.5 flex-wrap">
+          <span class="font-black text-sm">${esc(item.sku)}</span>
+          ${statusTag}
+          ${grupo}
+          ${lock}
+        </div>
+        <div class="text-[11px] text-slate-400 truncate">${esc(item.descricao||'')}</div>
+        <div class="text-[10px] text-slate-500 mt-0.5">${origem}${esc(item.identificacao||'Sem identificação')} · ${esc(item.galpao||'--')} · Qtd ${fmtQty(item.qtdPedida)}</div>
       </div>
-      <div class="text-[11px] text-slate-400 truncate">${esc(item.descricao||'')}</div>
-      <div class="text-[10px] text-slate-500 mt-0.5">${origem}${esc(item.identificacao||'Sem identificação')} · ${esc(item.galpao||'--')} · Qtd ${fmtQty(item.qtdPedida)}</div>
     </div>
     <button class="btn-abrir-item shrink-0 min-h-[40px] px-3 rounded-xl bg-brand-blue text-black font-black text-xs">Abrir</button>
   </div>`;
@@ -629,10 +775,13 @@ function handleScannedCode(raw){
 function openEscolherModal(matches){
   const box = $('lista-escolher');
   box.innerHTML = matches.map(m => `
-    <button class="btn-escolher w-full text-left bg-brand-card2 border border-brand-border rounded-xl p-3 mb-2" data-item-id="${m.id}">
-      <div class="font-black text-sm">${esc(m.sku)} — ${esc(m.identificacao||'Sem identificação')}</div>
-      <div class="text-[11px] text-slate-400">${esc(m.descricao||'')}</div>
-      <div class="text-[10px] text-slate-500">${esc(m.galpao||'--')} · Qtd ${fmtQty(m.qtdPedida)}</div>
+    <button class="btn-escolher w-full text-left bg-brand-card2 border border-brand-border rounded-xl p-3 mb-2 flex items-center gap-2" data-item-id="${m.id}">
+      ${m.foto ? `<img src="${esc(m.foto)}" class="w-10 h-10 rounded-lg object-cover bg-black/30 border border-brand-border shrink-0" alt="">` : ''}
+      <div class="min-w-0">
+        <div class="font-black text-sm">${esc(m.sku)} — ${esc(m.identificacao||'Sem identificação')}</div>
+        <div class="text-[11px] text-slate-400">${esc(m.descricao||'')}</div>
+        <div class="text-[10px] text-slate-500">${esc(m.galpao||'--')} · Qtd ${fmtQty(m.qtdPedida)}</div>
+      </div>
     </button>`).join('');
   box.querySelectorAll('.btn-escolher').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -651,7 +800,16 @@ $('btn-cancelar-escolher').addEventListener('click', () => $('modal-escolher').c
 
 function openConfirmModal(item){
   if(!item) return;
+  if(isLockAtivo(item) && item.emSeparacaoPor !== (state.operador && state.operador.nome)){
+    const segundos = Math.round((nowTs() - item.emSeparacaoDesde) / 1000);
+    const seguir = confirm(`${item.sku} já está sendo separado por ${item.emSeparacaoPor} agora (há ${segundos}s). Abrir mesmo assim?`);
+    if(!seguir) return;
+  }
   state.itemAtual = item;
+  travarItem(item);
+  const fotoEl = $('conf-foto');
+  if(item.foto){ fotoEl.src = item.foto; fotoEl.classList.remove('hidden'); }
+  else fotoEl.classList.add('hidden');
   $('conf-sku').textContent = item.sku;
   $('conf-descricao').textContent = item.descricao || '';
   $('conf-pedido').textContent = item.identificacao || 'Sem identificação';
@@ -659,6 +817,19 @@ function openConfirmModal(item){
   const origemEl = $('conf-origem');
   if(item.localizacaoOrigem){ origemEl.textContent = '📍 Buscar em: ' + item.localizacaoOrigem; origemEl.classList.remove('hidden'); }
   else origemEl.classList.add('hidden');
+  const estoqueEl = $('conf-estoque-locais');
+  if(item.estoqueLocais){ estoqueEl.textContent = '🏭 Estoque informou: ' + item.estoqueLocais; estoqueEl.classList.remove('hidden'); }
+  else estoqueEl.classList.add('hidden');
+
+  const grupoEl = $('conf-pedidos-agrupados');
+  const pedidos = Array.isArray(item.pedidosAgrupados) ? item.pedidosAgrupados : [];
+  if(pedidos.length > 1){
+    $('conf-pedidos-lista').innerHTML = pedidos.map(p => `<div>• ${esc(p.identificacao || 'Sem identificação')} — ${fmtQty(p.quantidade)} un.</div>`).join('');
+    grupoEl.classList.remove('hidden');
+  } else {
+    grupoEl.classList.add('hidden');
+  }
+
   $('conf-qtd-pedida').textContent = fmtQty(item.qtdPedida);
   $('conf-qtd').value = fmtQty(Math.max(0, Number(item.qtdPedida||0) - Number(item.qtdSeparada||0)));
 
@@ -674,6 +845,7 @@ function openConfirmModal(item){
 }
 
 $('btn-cancelar-confirmar').addEventListener('click', () => {
+  liberarLock(state.itemAtual);
   $('modal-confirmar').classList.add('hidden');
   state.itemAtual = null;
 });
@@ -692,6 +864,18 @@ $('btn-confirmar-separacao').addEventListener('click', async () => {
     const result = await ref.transaction(cur => {
       if(!cur) return cur;
       if(cur.status !== 'pendente' && cur.status !== 'revisao') return; // abortar: outro operador já mexeu
+
+      // Penalidade: esse item estava em revisão (alguém marcou "Não Encontrado")
+      // e agora está sendo separado por OUTRO operador — a primeira informação
+      // estava errada. Corrigir o próprio erro (mesmo operador) não penaliza.
+      if(cur.status === 'revisao' && cur.revisaoOperador1 && cur.revisaoOperador1 !== state.operador.nome){
+        cur.penalidadeAplicada = true;
+        cur.penalidadeOperador = cur.revisaoOperador1;
+        cur.penalidadeMotivo = 'Marcou "Não Encontrado", mas outro operador localizou o item depois.';
+        cur.penalidadeEncontradoPor = state.operador.nome;
+        cur.penalidadeTs = nowTs();
+      }
+
       cur.status = 'separado';
       cur.qtdSeparada = qtd;
       cur.localFisico = local;
@@ -699,6 +883,8 @@ $('btn-confirmar-separacao').addEventListener('click', async () => {
       cur.operadorSeparou = state.operador.nome;
       cur.dataHoraSeparado = nowTs();
       cur.atualizadoEm = nowTs();
+      cur.emSeparacaoPor = null;
+      cur.emSeparacaoDesde = null;
       return cur;
     });
     if(!result.committed){
@@ -712,7 +898,12 @@ $('btn-confirmar-separacao').addEventListener('click', async () => {
         atualizadoEm: nowTs(),
         atualizadoPor: state.operador.nome
       });
-      toast(`✔ ${item.sku} separado com sucesso`, 'ok');
+      const salvo = result.snapshot.val() || {};
+      if(salvo.penalidadeAplicada){
+        toast(`✔ ${item.sku} separado — ${salvo.penalidadeOperador} recebeu uma penalidade por "Não Encontrado" incorreto`, 'warn');
+      } else {
+        toast(`✔ ${item.sku} separado com sucesso`, 'ok');
+      }
       vibrate(90);
     }
   } catch(e){
@@ -736,6 +927,8 @@ $('btn-nao-encontrado').addEventListener('click', async () => {
         cur.revisaoOperador1 = state.operador.nome;
         cur.revisaoTs1 = nowTs();
         cur.atualizadoEm = nowTs();
+        cur.emSeparacaoPor = null;
+        cur.emSeparacaoDesde = null;
         return cur;
       }
       if(cur.status === 'revisao'){
@@ -743,6 +936,8 @@ $('btn-nao-encontrado').addEventListener('click', async () => {
         cur.revisaoOperador2 = state.operador.nome;
         cur.revisaoTs2 = nowTs();
         cur.atualizadoEm = nowTs();
+        cur.emSeparacaoPor = null;
+        cur.emSeparacaoDesde = null;
         return cur;
       }
       return; // outro status: aborta
@@ -777,6 +972,189 @@ $('btn-nao-encontrado').addEventListener('click', async () => {
   $('modal-confirmar').classList.add('hidden');
   state.itemAtual = null;
 });
+
+/* =========================================================================
+ * PRODUTIVIDADE (pacotes separados por operador + penalidades)
+ * =======================================================================*/
+
+state.prodPeriodo = 'dia'; // 'dia' | 'mes'
+
+function mesAtualStr(){
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
+}
+$('prod-mes-input').value = mesAtualStr();
+
+$('btn-prod-hoje').addEventListener('click', () => {
+  state.prodPeriodo = 'dia';
+  $('prod-mes-input').classList.add('hidden');
+  atualizarBotoesPeriodo();
+  renderProdutividade();
+});
+$('btn-prod-mes').addEventListener('click', () => {
+  state.prodPeriodo = 'mes';
+  $('prod-mes-input').classList.remove('hidden');
+  atualizarBotoesPeriodo();
+  renderProdutividade();
+});
+$('prod-mes-input').addEventListener('change', renderProdutividade);
+
+function atualizarBotoesPeriodo(){
+  document.querySelectorAll('.prod-periodo-btn').forEach(b => {
+    const ativo = (b.id === 'btn-prod-hoje' && state.prodPeriodo === 'dia') || (b.id === 'btn-prod-mes' && state.prodPeriodo === 'mes');
+    b.className = 'prod-periodo-btn min-h-[38px] rounded-xl text-[11px] font-black ' + (ativo ? 'bg-brand-orange text-black' : 'bg-brand-card text-slate-300 border border-brand-border');
+  });
+}
+
+function itemNoPeriodo(ts){
+  if(!ts) return false;
+  const d = new Date(ts);
+  const hoje = new Date();
+  if(state.prodPeriodo === 'dia'){
+    return d.toDateString() === hoje.toDateString();
+  }
+  const [ano, mes] = ($('prod-mes-input').value || mesAtualStr()).split('-').map(Number);
+  return d.getFullYear() === ano && (d.getMonth()+1) === mes;
+}
+
+function computeProdutividade(){
+  const arr = itemsArray();
+  const porOperador = {};
+  const get = nome => (porOperador[nome] = porOperador[nome] || { nome, pacotes: 0, penalidades: 0 });
+
+  arr.forEach(i => {
+    if(i.status === 'separado' && i.operadorSeparou && itemNoPeriodo(i.dataHoraSeparado)){
+      get(i.operadorSeparou).pacotes++;
+    }
+    if(i.penalidadeAplicada && i.penalidadeOperador && itemNoPeriodo(i.penalidadeTs)){
+      get(i.penalidadeOperador).penalidades++;
+    }
+  });
+
+  return Object.values(porOperador).sort((a,b) => b.pacotes - a.pacotes || a.nome.localeCompare(b.nome,'pt-BR'));
+}
+
+function renderProdutividade(){
+  atualizarBotoesPeriodo();
+  const dados = computeProdutividade();
+  const box = $('lista-produtividade');
+  if(!dados.length){
+    box.innerHTML = `<div class="text-center text-slate-500 text-xs border border-dashed border-brand-border rounded-xl p-6">Nenhuma separação registrada nesse período.</div>`;
+    return;
+  }
+  box.innerHTML = dados.map((op, idx) => `
+    <div class="bg-brand-card border ${op.penalidades>0 ? 'border-brand-red/40' : 'border-brand-border'} rounded-xl p-3 flex items-center justify-between gap-2">
+      <div class="flex items-center gap-2 min-w-0">
+        <div class="w-7 h-7 rounded-full bg-brand-card2 border border-brand-border flex items-center justify-center text-[11px] font-black shrink-0">${idx+1}º</div>
+        <div class="min-w-0">
+          <div class="font-black text-sm truncate">${esc(op.nome)}</div>
+          <div class="text-[10px] text-slate-500">${op.pacotes} pacote(s) separado(s)</div>
+        </div>
+      </div>
+      ${op.penalidades > 0 ? `<span class="tag-pill bg-red-500/15 text-red-300 border border-red-500/30 shrink-0">⚠ ${op.penalidades} penalidade${op.penalidades>1?'s':''}</span>` : ''}
+    </div>`).join('');
+}
+
+/* =========================================================================
+ * SOBRAS — produto separado que não chegou a ser embalado (motivo + histórico)
+ * =======================================================================*/
+
+state.itemSobraAtual = null;
+
+$('btn-buscar-sobra').addEventListener('click', buscarParaSobra);
+$('sobra-sku').addEventListener('keydown', e => { if(e.key === 'Enter'){ e.preventDefault(); buscarParaSobra(); } });
+
+function buscarParaSobra(){
+  const code = normalizeCode($('sobra-sku').value);
+  const box = $('sobra-busca-resultado');
+  if(!code){ box.innerHTML = ''; return; }
+
+  const matches = itemsArray().filter(i =>
+    i.status === 'separado' && !i.sobra &&
+    (normalizeCode(i.sku) === code || (Array.isArray(i.codigosAlternativos) && i.codigosAlternativos.some(c => normalizeCode(c) === code)))
+  ).sort((a,b) => (b.dataHoraSeparado||0) - (a.dataHoraSeparado||0));
+
+  if(!matches.length){
+    box.innerHTML = `<div class="text-center text-slate-500 text-xs border border-dashed border-brand-border rounded-xl p-4">Nenhum item separado (e ainda sem sobra registrada) com esse SKU.</div>`;
+    return;
+  }
+
+  box.innerHTML = matches.map(m => `
+    <button class="btn-escolher-sobra w-full text-left bg-brand-card border border-brand-border rounded-xl p-3 mb-2" data-item-id="${m.id}">
+      <div class="font-black text-sm">${esc(m.sku)}</div>
+      <div class="text-[11px] text-slate-400">${esc(m.descricao||'')}</div>
+      <div class="text-[10px] text-slate-500 mt-0.5">Separado por ${esc(m.operadorSeparou||'--')} em ${m.dataHoraSeparado ? new Date(m.dataHoraSeparado).toLocaleString('pt-BR') : '--'} · Qtd ${fmtQty(m.qtdSeparada)}</div>
+    </button>`).join('');
+
+  box.querySelectorAll('.btn-escolher-sobra').forEach(btn => {
+    btn.addEventListener('click', () => abrirModalSobra(matches.find(m => m.id === btn.dataset.itemId)));
+  });
+}
+
+function abrirModalSobra(item){
+  if(!item) return;
+  state.itemSobraAtual = item;
+  $('sobra-modal-sku').textContent = item.sku;
+  $('sobra-modal-descricao').textContent = item.descricao || '';
+  $('sobra-motivo').value = 'Pedido cancelado';
+  $('sobra-obs').value = '';
+  $('modal-sobra').classList.remove('hidden');
+}
+
+$('btn-cancelar-sobra').addEventListener('click', () => {
+  $('modal-sobra').classList.add('hidden');
+  state.itemSobraAtual = null;
+});
+
+$('btn-confirmar-sobra').addEventListener('click', async () => {
+  const item = state.itemSobraAtual;
+  if(!item || !state.operador) return;
+  const motivo = $('sobra-motivo').value;
+  const obs = $('sobra-obs').value.trim();
+
+  const ref = db.ref(`${PATH_FILA}/${item.id}`);
+  try {
+    const result = await ref.transaction(cur => {
+      if(!cur) return cur;
+      if(cur.status !== 'separado' || cur.sobra) return; // já mudou ou já tem sobra registrada
+      cur.sobra = true;
+      cur.sobraMotivo = motivo;
+      cur.sobraObs = obs;
+      cur.sobraOperador = state.operador.nome;
+      cur.sobraTs = nowTs();
+      cur.atualizadoEm = nowTs();
+      return cur;
+    });
+    if(!result.committed){
+      toast('Esse item já mudou de estado — atualize a busca.', 'warn');
+    } else {
+      toast(`Sobra registrada para ${item.sku}`, 'ok');
+    }
+  } catch(e){
+    toast('Erro ao salvar: ' + (e.message||e), 'error');
+  }
+  $('modal-sobra').classList.add('hidden');
+  state.itemSobraAtual = null;
+  $('sobra-sku').value = '';
+  $('sobra-busca-resultado').innerHTML = '';
+});
+
+function renderSobras(){
+  const arr = itemsArray().filter(i => i.sobra).sort((a,b) => (b.sobraTs||0) - (a.sobraTs||0));
+  const box = $('lista-sobras');
+  if(!arr.length){
+    box.innerHTML = `<div class="text-center text-slate-500 text-xs border border-dashed border-brand-border rounded-xl p-6">Nenhuma sobra registrada.</div>`;
+    return;
+  }
+  box.innerHTML = arr.map(i => `
+    <div class="bg-brand-card border border-brand-orange/40 rounded-xl p-3">
+      <div class="font-black text-sm">${esc(i.sku)}</div>
+      <div class="text-[11px] text-slate-400">${esc(i.descricao||'')}</div>
+      <div class="text-[10px] text-orange-300 mt-1 font-bold">${esc(i.sobraMotivo||'')}</div>
+      ${i.sobraObs ? `<div class="text-[10px] text-slate-500">${esc(i.sobraObs)}</div>` : ''}
+      <div class="text-[10px] text-slate-500 mt-1">Qtd separada: ${fmtQty(i.qtdSeparada)} · Registrado por ${esc(i.sobraOperador||'--')} em ${i.sobraTs ? new Date(i.sobraTs).toLocaleString('pt-BR') : '--'}</div>
+    </div>`).join('');
+}
 
 /* =========================================================================
  * PAUSAR ANÚNCIOS (aba restrita)
@@ -825,8 +1203,47 @@ function renderPausar(){
  * IMPORTAR PDF
  * =======================================================================*/
 
-if(window.pdfjsLib){
-  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://unpkg.com/pdfjs-dist@3.11.174/legacy/build/pdf.worker.min.js';
+// CDNs alternativos: se o principal (unpkg) estiver lento/bloqueado numa rede
+// de celular específica, tenta os próximos em vez de travar em silêncio.
+const PDFJS_LIB_URLS = [
+  'https://unpkg.com/pdfjs-dist@3.11.174/legacy/build/pdf.min.js',
+  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/legacy/build/pdf.min.js',
+  'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/legacy/build/pdf.min.js'
+];
+const PDFJS_WORKER_URLS = [
+  'https://unpkg.com/pdfjs-dist@3.11.174/legacy/build/pdf.worker.min.js',
+  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/legacy/build/pdf.worker.min.js',
+  'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/legacy/build/pdf.worker.min.js'
+];
+
+function loadScriptOnce(src){
+  return new Promise((resolve, reject) => {
+    if(Array.from(document.scripts).some(s => s.src === src)) return resolve();
+    const s = document.createElement('script');
+    s.src = src;
+    s.async = true;
+    s.onload = resolve;
+    s.onerror = () => reject(new Error('Falha ao carregar ' + src));
+    document.head.appendChild(s);
+  });
+}
+
+async function ensurePdfJs(){
+  if(window.pdfjsLib){
+    if(!pdfjsLib.GlobalWorkerOptions.workerSrc) pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER_URLS[0];
+    return true;
+  }
+  for(let i = 0; i < PDFJS_LIB_URLS.length; i++){
+    try{
+      $('pdf-status').textContent = i === 0 ? 'Carregando leitor de PDF...' : `Tentando fonte alternativa (${i+1}/${PDFJS_LIB_URLS.length})...`;
+      await loadScriptOnce(PDFJS_LIB_URLS[i]);
+      if(window.pdfjsLib){
+        pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER_URLS[i];
+        return true;
+      }
+    }catch(_){ /* tenta o próximo CDN */ }
+  }
+  return false;
 }
 
 async function sha256Hex(buf){
@@ -841,6 +1258,13 @@ $('input-pdf').addEventListener('change', async e => {
   const file = e.target.files[0];
   e.target.value = '';
   if(!file) return;
+
+  const pdfjsOk = await ensurePdfJs();
+  if(!pdfjsOk){
+    $('pdf-status').textContent = 'Não foi possível carregar o leitor de PDF (rede instável ou bloqueada). Tente novamente ou troque de rede (Wi-Fi/dados).';
+    toast('Falha ao carregar o leitor de PDF', 'error');
+    return;
+  }
 
   $('pdf-status').textContent = 'Verificando se esse PDF já foi importado...';
   const buf = await file.arrayBuffer();
@@ -868,10 +1292,12 @@ $('input-pdf').addEventListener('change', async e => {
 
   $('pdf-status').textContent = 'Lendo PDF...';
   try {
-    const rows = await extractRowsFromPdfBuffer(buf);
+    const leitura = await extractRowsFromPdfBuffer(buf, (pagina, total) => {
+      $('pdf-status').textContent = total > 1 ? `Lendo PDF... página ${pagina} de ${total}` : 'Lendo PDF...';
+    });
+    const rows = leitura.rows;
 
-    // Se esse SKU já foi separado antes, puxa o último galpão/local conhecido
-    // em vez de deixar no galpão padrão.
+    // 1) Memória própria do Picking (Firebase, alimentada pelas separações já feitas).
     let memorizados = 0;
     rows.forEach(r => {
       const mem = lookupLocationMemory(r.sku, r.codigosAlternativos);
@@ -882,36 +1308,86 @@ $('input-pdf').addEventListener('change', async e => {
       }
     });
 
-    if(!rows.length){
-      $('pdf-status').textContent = 'Não consegui identificar itens automaticamente. Adicione as linhas manualmente abaixo.';
-    } else {
-      $('pdf-status').textContent = `${rows.length} item(ns) identificado(s)${memorizados ? `, ${memorizados} com localização já conhecida` : ''}. Revise antes de enviar.`;
+    // 2) Controle de Estoque (planilha à parte, mais autoritativa quando disponível).
+    if(ESTOQUE_API_URL){
+      $('pdf-status').textContent = 'Consultando localizações no Controle de Estoque...';
+      const todosCodigos = [...new Set(rows.flatMap(r => [r.sku, ...(r.codigosAlternativos||[])].filter(Boolean)))];
+      const estoqueInfo = await fetchEstoqueLocalizacoes(todosCodigos);
+      rows.forEach(r => {
+        const codes = [r.sku, ...(r.codigosAlternativos||[])];
+        for(const c of codes){
+          const info = estoqueInfo[normalizeCode(c)];
+          if(info && info.encontrado){
+            if(!r.localFisicoSugerido) memorizados++;
+            r.estoqueLocais = info.locais || '';
+            r.foto = info.foto || '';
+            if(!r.descricao && info.descricao) r.descricao = info.descricao;
+            const primeiro = primeiroLocalDoTexto(info.locais);
+            if(primeiro){
+              r.galpao = primeiro.galpao || r.galpao;
+              r.localFisicoSugerido = primeiro.local || r.localFisicoSugerido;
+            }
+            break;
+          }
+        }
+      });
     }
+
+    const avisoPaginas = leitura.paginasComErro.length
+      ? ` ⚠ ${leitura.paginasComErro.length} de ${leitura.totalPaginas} página(s) não puderam ser lidas (${leitura.paginasComErro.join(', ')}) — pode faltar item da lista. Tente de novo, com internet melhor, ou pelo computador.`
+      : '';
+
+    if(!rows.length){
+      $('pdf-status').textContent = 'Não consegui identificar itens automaticamente. Adicione as linhas manualmente abaixo.' + avisoPaginas;
+    } else {
+      $('pdf-status').textContent = `${rows.length} item(ns) identificado(s) em ${leitura.totalPaginas} página(s)${memorizados ? `, ${memorizados} com localização já conhecida` : ''}. Revise antes de enviar.${avisoPaginas}`;
+    }
+    if(leitura.paginasComErro.length) toast(`Atenção: ${leitura.paginasComErro.length} página(s) do PDF não foram lidas — confira a lista antes de enviar`, 'warn');
+
     state.pdfRows = rows.length ? rows : [emptyPdfRow()];
     renderPdfPreview();
     $('pdf-preview-wrap').classList.remove('hidden');
   } catch(err){
-    $('pdf-status').textContent = 'Erro ao ler o PDF: ' + (err.message || err);
+    $('pdf-status').textContent = 'Erro ao ler o PDF: ' + (err.message || err) + ' — se estiver no celular, tente pelo computador pra confirmar se é específico do aparelho.';
   }
 });
 
 function emptyPdfRow(){
-  return { sku:'', descricao:'', quantidade:1, galpao: GALPOES[0], localizacaoOrigem:'', localFisicoSugerido:'', codigosAlternativos:[] };
+  return { sku:'', descricao:'', quantidade:1, galpao: GALPOES[0], localizacaoOrigem:'', localFisicoSugerido:'', estoqueLocais:'', foto:'', codigosAlternativos:[] };
 }
 
-async function extractRowsFromPdfBuffer(buf){
+/*
+ * Lê o PDF PÁGINA POR PÁGINA, isolando erros de cada uma. Isso importa
+ * especialmente no celular: um aparelho mais fraco/rede instável pode falhar
+ * em ler UMA página específica (timeout, memória) — sem isolar por página,
+ * isso ou derruba a importação inteira em silêncio, ou (pior) faz o loop
+ * parar no meio sem avisar que faltou gente. Aqui cada página que falha fica
+ * registrada, e o restante continua sendo processado normalmente.
+ */
+async function extractRowsFromPdfBuffer(buf, onProgress){
   const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+  const totalPaginas = pdf.numPages;
   const allItems = [];
-  for(let p = 1; p <= pdf.numPages; p++){
-    const page = await pdf.getPage(p);
-    const content = await page.getTextContent();
-    content.items.forEach(it => {
-      const str = (it.str || '').trim();
-      if(!str) return;
-      allItems.push({ x: it.transform[4], str });
-    });
+  const paginasComErro = [];
+
+  for(let p = 1; p <= totalPaginas; p++){
+    if(onProgress) onProgress(p, totalPaginas);
+    try{
+      const page = await pdf.getPage(p);
+      const content = await page.getTextContent();
+      content.items.forEach(it => {
+        const str = (it.str || '').trim();
+        if(!str) return;
+        allItems.push({ x: it.transform[4], str });
+      });
+    }catch(err){
+      console.warn(`Falha ao ler a página ${p}/${totalPaginas} do PDF:`, err);
+      paginasComErro.push(p);
+    }
   }
-  return parseSeparationItems(allItems);
+
+  const rows = parseSeparationItems(allItems);
+  return { rows, totalPaginas, paginasComErro };
 }
 
 /*
@@ -1012,6 +1488,7 @@ function renderPdfPreview(){
   box.innerHTML = state.pdfRows.map((r, idx) => `
     <div class="bg-brand-card2 border border-brand-border rounded-xl p-2 space-y-1.5" data-row="${idx}">
       <div class="grid grid-cols-12 gap-1.5 items-center">
+        ${r.foto ? `<img src="${esc(r.foto)}" class="col-span-12 w-full max-h-28 object-contain rounded-lg bg-black/30 border border-brand-border" alt="">` : ''}
         <input class="f-sku col-span-3 bg-black/40 border border-brand-border rounded-lg px-2 py-2 text-xs font-black" placeholder="SKU" value="${esc(r.sku)}">
         <input class="f-desc col-span-5 bg-black/40 border border-brand-border rounded-lg px-2 py-2 text-xs" placeholder="Descrição" value="${esc(r.descricao)}">
         <input class="f-qtd col-span-2 bg-black/40 border border-brand-border rounded-lg px-2 py-2 text-xs text-center" type="number" step="0.01" placeholder="Qtd" value="${esc(r.quantidade)}">
@@ -1021,7 +1498,7 @@ function renderPdfPreview(){
         <button class="f-del col-span-1 text-red-400 text-xs font-black">✕</button>
       </div>
       ${r.localizacaoOrigem ? `<div class="text-[10px] text-orange-300 pl-1">📍 origem no PDF: ${esc(r.localizacaoOrigem)}</div>` : ''}
-      ${r.localFisicoSugerido ? `<div class="text-[10px] text-sky-300 pl-1">🕘 última vez encontrado em: ${esc(r.localFisicoSugerido)} (${esc(r.galpao)})</div>` : ''}
+      ${r.estoqueLocais ? `<div class="text-[10px] text-emerald-300 pl-1">🏭 Estoque informou: ${esc(r.estoqueLocais)}</div>` : (r.localFisicoSugerido ? `<div class="text-[10px] text-sky-300 pl-1">🕘 última vez encontrado em: ${esc(r.localFisicoSugerido)} (${esc(r.galpao)})</div>` : '')}
       ${(r.codigosAlternativos && r.codigosAlternativos.length > 1) ? `<div class="text-[10px] text-slate-500 pl-1">códigos: ${r.codigosAlternativos.map(esc).join(' · ')}</div>` : ''}
     </div>`).join('');
 
@@ -1063,28 +1540,69 @@ $('btn-confirmar-import').addEventListener('click', async () => {
     criadoEm: nowTs()
   });
 
+  // Agrupa pelo mesmo SKU + galpão: se o produto já está pendente na fila (dessa
+  // importação ou de uma anterior que ainda não foi separada), soma a quantidade
+  // no MESMO item em vez de criar outro — assim o operador vai no local físico
+  // uma única vez para atender vários pedidos daquele produto, não vários.
+  // Só junta em itens 'pendente' (nunca em 'revisao', que já está com um problema
+  // em aberto e merece ser resolvido isoladamente).
   const updates = {};
+  const jaProcessadosNoLote = {};
+  let unificados = 0;
+
   rows.forEach(r => {
-    const itemRef = db.ref(PATH_FILA).push();
-    updates[itemRef.key] = {
-      sku: String(r.sku).trim().toUpperCase(),
-      codigosAlternativos: Array.isArray(r.codigosAlternativos) ? r.codigosAlternativos.map(c => String(c).toUpperCase()) : [],
-      descricao: String(r.descricao||'').trim(),
-      qtdPedida: Number(r.quantidade) || 1,
-      qtdSeparada: 0,
-      identificacao,
-      localizacaoOrigem: String(r.localizacaoOrigem||'').trim(),
-      localFisicoSugerido: String(r.localFisicoSugerido||'').trim(),
-      galpao: r.galpao || GALPOES[0],
-      status: 'pendente',
-      importId,
-      criadoEm: nowTs(),
-      atualizadoEm: nowTs()
-    };
+    const skuNorm = normalizeCode(r.sku);
+    const galpao = r.galpao || GALPOES[0];
+    const chave = skuNorm + '|' + galpao;
+    const qtdNova = Number(r.quantidade) || 1;
+
+    let existenteId = jaProcessadosNoLote[chave];
+    if(!existenteId){
+      const achado = itemsArray().find(i => i.status === 'pendente' && normalizeCode(i.sku) === skuNorm && (i.galpao || GALPOES[0]) === galpao);
+      if(achado) existenteId = achado.id;
+    }
+
+    if(existenteId){
+      unificados++;
+      const atual = updates[existenteId] || state.fila[existenteId];
+      const qtdAtual = Number(atual.qtdPedida || 0);
+      const pedidosAtuais = Array.isArray(atual.pedidosAgrupados)
+        ? atual.pedidosAgrupados.slice()
+        : [{ importId: atual.importId, identificacao: atual.identificacao || '', quantidade: qtdAtual }];
+      pedidosAtuais.push({ importId, identificacao, quantidade: qtdNova });
+
+      updates[existenteId] = Object.assign({}, atual, {
+        qtdPedida: qtdAtual + qtdNova,
+        pedidosAgrupados: pedidosAtuais,
+        atualizadoEm: nowTs()
+      });
+      jaProcessadosNoLote[chave] = existenteId;
+    } else {
+      const itemRef = db.ref(PATH_FILA).push();
+      updates[itemRef.key] = {
+        sku: String(r.sku).trim().toUpperCase(),
+        codigosAlternativos: Array.isArray(r.codigosAlternativos) ? r.codigosAlternativos.map(c => String(c).toUpperCase()) : [],
+        descricao: String(r.descricao||'').trim(),
+        qtdPedida: qtdNova,
+        qtdSeparada: 0,
+        identificacao,
+        localizacaoOrigem: String(r.localizacaoOrigem||'').trim(),
+        localFisicoSugerido: String(r.localFisicoSugerido||'').trim(),
+        estoqueLocais: String(r.estoqueLocais||'').trim(),
+        foto: String(r.foto||'').trim(),
+        galpao,
+        status: 'pendente',
+        importId,
+        pedidosAgrupados: [{ importId, identificacao, quantidade: qtdNova }],
+        criadoEm: nowTs(),
+        atualizadoEm: nowTs()
+      };
+      jaProcessadosNoLote[chave] = itemRef.key;
+    }
   });
   await db.ref(PATH_FILA).update(updates);
 
-  toast(`${rows.length} item(ns) enviados para a fila`, 'ok');
+  toast(`${rows.length} item(ns) processados${unificados ? `, ${unificados} unificado(s) com pedidos já pendentes` : ''}`, 'ok');
   state.pdfRows = [];
   state.pdfFileName = '';
   state.pdfFileHash = '';
@@ -1185,8 +1703,8 @@ async function openCamera(target){
 
   try {
     if(isIOS()){
-      const ok = await startHtml5Live();
-      if(!ok) cameraSetStatus('Leitor não carregou no iOS. Use "Tirar foto do código".');
+      // startHtml5Live() já define uma mensagem de status detalhada em caso de falha.
+      await startHtml5Live();
       return;
     }
     try {
@@ -1195,8 +1713,7 @@ async function openCamera(target){
       if(ok) return;
     } catch(_){ await stopNativeOnly(); }
 
-    const ok2 = await startHtml5Live();
-    if(!ok2) cameraSetStatus('Não foi possível abrir a câmera. Use "Tirar foto do código".');
+    await startHtml5Live();
   } catch(err){
     cameraSetStatus('Erro ao abrir câmera: ' + (err.message||err));
   }
@@ -1231,6 +1748,15 @@ async function startNativeGetUserMedia(){
   return true;
 }
 
+function html5Formats(){
+  const f = window.Html5QrcodeSupportedFormats;
+  if(!f) return undefined;
+  return [
+    f.QR_CODE, f.CODE_128, f.CODE_39, f.CODE_93, f.EAN_13, f.EAN_8,
+    f.ITF, f.CODABAR, f.UPC_A, f.UPC_E, f.DATA_MATRIX, f.PDF_417
+  ].filter(v => v !== undefined && v !== null);
+}
+
 async function startHtml5Live(){
   if(!window.Html5Qrcode) return false;
   const video = $('camera-video');
@@ -1243,11 +1769,38 @@ async function startHtml5Live(){
     qrbox: (w,h) => ({ width: Math.max(220, Math.floor(Math.min(w*.88,420))), height: Math.max(90, Math.floor(Math.min(h*.28,150))) }),
     aspectRatio: 1.7777778
   };
-  state.html5 = new Html5Qrcode('camera-region', { verbose:false });
+  const formats = html5Formats();
+  const options = {
+    verbose: false,
+    // O iOS Safari não implementa BarcodeDetector nativo, mas a lib tenta usá-lo
+    // por padrão quando "disponível" e falha silenciosamente em alguns iOS/WKWebView.
+    // Forçar o decodificador próprio da lib (ZXing/JS) é o que resolve isso.
+    experimentalFeatures: { useBarCodeDetectorIfSupported: false },
+    ...(formats ? { formatsToSupport: formats } : {})
+  };
+  state.html5 = new Html5Qrcode('camera-region', options);
   cameraSetStatus(isIOS() ? 'iPhone detectado. Carregando leitor compatível...' : 'Carregando leitor...');
-  await state.html5.start({ facingMode: state.facingMode }, config, text => onCameraCode(text), () => {});
-  cameraSetStatus('Câmera ativa. Aproxime o código até preencher o retângulo.');
-  return true;
+
+  const attempts = [
+    { facingMode: state.facingMode },
+    { facingMode: { ideal: state.facingMode } }
+  ];
+  let lastError = null;
+  for(const camConfig of attempts){
+    try {
+      await state.html5.start(camConfig, config, text => onCameraCode(text), () => {});
+      cameraSetStatus('Câmera ativa. Aproxime o código até preencher o retângulo.');
+      return true;
+    } catch(err){
+      lastError = err;
+      try { if(state.html5.isScanning) await state.html5.stop(); } catch(_){}
+    }
+  }
+
+  const errName = lastError && (lastError.name || lastError.code || '');
+  const errMsg = lastError ? (lastError.message || String(lastError)) : 'motivo desconhecido';
+  cameraSetStatus(`Câmera não iniciou${errName ? ' (' + errName + ')' : ''}: ${errMsg}. Use "Tirar foto do código".`);
+  return false;
 }
 
 async function decodeImageFile(file){
@@ -1255,7 +1808,12 @@ async function decodeImageFile(file){
   cameraSetStatus('Lendo foto...');
   let holder = document.getElementById('picking-photo-reader');
   if(!holder){ holder = document.createElement('div'); holder.id = 'picking-photo-reader'; holder.style.display='none'; document.body.appendChild(holder); }
-  const reader = new Html5Qrcode('picking-photo-reader', { verbose:false });
+  const formats = html5Formats();
+  const reader = new Html5Qrcode('picking-photo-reader', {
+    verbose: false,
+    experimentalFeatures: { useBarCodeDetectorIfSupported: false },
+    ...(formats ? { formatsToSupport: formats } : {})
+  });
   try {
     const text = await reader.scanFile(file, true);
     try { await reader.clear(); } catch(_){}
@@ -1311,6 +1869,14 @@ function boot(){
   ensureOperador();
   initFirebase();
   switchTab('fila');
+
+  // Trava por inatividade expira sozinha depois de LOCK_TIMEOUT_MS; sem isso o
+  // badge "🔒 Fulano" só some quando algo novo mudar no Firebase. Reavaliar a
+  // cada 20s garante que ele suma na hora certa mesmo sem novos eventos.
+  setInterval(() => {
+    if(!$('view-fila').classList.contains('hidden')) renderFila();
+    if(!$('view-revisao').classList.contains('hidden')) renderRevisao();
+  }, 20000);
 }
 
 document.addEventListener('DOMContentLoaded', boot);
