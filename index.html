@@ -1882,6 +1882,39 @@ async function startHtml5Live(){
   return false;
 }
 
+// Respaldo final: se nem o leitor de código de barras/QR conseguir decodificar
+// a foto, tenta OCR pra ler os números impressos embaixo do código de barras
+// (todo EAN/GTIN tem essa sequência impressa por baixo pra leitura manual).
+// Carrega a biblioteca só quando realmente precisa (é pesada, ~2-4MB).
+const TESSERACT_CDN = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
+
+async function ensureTesseract(){
+  if(window.Tesseract) return true;
+  try{ await loadScriptOnce(TESSERACT_CDN); }catch(_){ return false; }
+  return !!window.Tesseract;
+}
+
+async function tentarOcrNumeros(file){
+  const ok = await ensureTesseract();
+  if(!ok) return '';
+  let worker = null;
+  try{
+    worker = await Tesseract.createWorker('eng');
+    const result = await worker.recognize(file);
+    const texto = (result && result.data && result.data.text) || '';
+    // Pega a maior sequência de dígitos encontrada — GTIN/EAN tem 8 a 14.
+    const sequencias = texto.match(/\d{6,}/g) || [];
+    if(!sequencias.length) return '';
+    sequencias.sort((a,b) => b.length - a.length);
+    return sequencias[0];
+  }catch(err){
+    console.warn('OCR falhou:', err);
+    return '';
+  }finally{
+    try{ if(worker) await worker.terminate(); }catch(_){}
+  }
+}
+
 async function decodeImageFile(file){
   if(!window.Html5Qrcode){ toast('Leitor de foto não carregado', 'error'); return; }
   cameraSetStatus('Lendo foto...');
@@ -1898,7 +1931,15 @@ async function decodeImageFile(file){
     try { await reader.clear(); } catch(_){}
     onCameraCode(text);
   } catch(e){
-    toast('Não consegui ler o código da foto. Aproxime mais e tente de novo.', 'error');
+    try { await reader.clear(); } catch(_){}
+    cameraSetStatus('Não achei código de barras/QR — tentando ler os números da foto...');
+    const numeros = await tentarOcrNumeros(file);
+    if(numeros){
+      toast(`Números lidos por OCR: ${numeros} — confira antes de confirmar`, 'warn');
+      onCameraCode(numeros);
+    } else {
+      toast('Não consegui ler o código nem os números da foto. Digite manualmente.', 'error');
+    }
   }
 }
 
