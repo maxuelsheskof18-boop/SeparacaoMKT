@@ -1403,28 +1403,73 @@ async function extractRowsFromPdfBuffer(buf, onProgress){
  * capturado a quantidade do item anterior. Também existe uma coluna de ícones de
  * checkbox (glifos Private Use Area em x≈54-55) que precisa ser ignorada.
  */
-const PDF_COL_CHECKBOX_MAX = 100;
-const PDF_COL_PRODUTO_MAX = 200;
-const PDF_COL_CODIGO_MAX = 345;
-const PDF_COL_QTD_MAX = 373;
-const PDF_COL_UN_MAX = 383;
-const PDF_COL_LOCALIZACAO_MAX = 460;
-
 const PDF_HEADER_LABELS = new Set([
   'Produto', 'Cód. (SKU/GTIN)', 'Qtd.', 'Un.', 'Localização', 'Anotações', 'Separação de mercadorias'
 ]);
 
-function pdfColumnFor(x){
-  if(x < PDF_COL_CHECKBOX_MAX) return 'checkbox';
-  if(x < PDF_COL_PRODUTO_MAX) return 'produto';
-  if(x < PDF_COL_CODIGO_MAX) return 'codigo';
-  if(x < PDF_COL_QTD_MAX) return 'qtd';
-  if(x < PDF_COL_UN_MAX) return 'un';
-  if(x < PDF_COL_LOCALIZACAO_MAX) return 'localizacao';
+// Ruído de cabeçalho/rodapé quando o PDF vem de "Imprimir" do navegador
+// (Ctrl+P) em vez de um botão de exportar — varia com data/hora, por isso é
+// reconhecido por padrão em vez de uma lista fixa de textos exatos.
+const PDF_NOISE_PATTERNS = [
+  /^\d{1,2}\/\d{1,2}\/\d{2,4},?\s*\d{1,2}:\d{2}/,  // "13/08/2026, 07:47"
+  /^https?:\/\//i,                                   // rodapé com a URL da página
+  /^\d+\s*\/\s*\d+$/,                                // número de página "1/1"
+  /^ERP\s+d[aeo]\s+Olist\b/i                         // título injetado pela impressão do navegador
+];
+
+function isPdfNoise(str){
+  return PDF_NOISE_PATTERNS.some(re => re.test(str));
+}
+
+/**
+ * Detecta a posição X real de cada coluna pelo PRÓPRIO cabeçalho desse PDF,
+ * em vez de usar posições fixas em pixel. Exportações diferentes (impressão
+ * do navegador, botão de exportar direto, larguras de página distintas)
+ * deslocam as colunas — um valor fixo calibrado numa exportação quebra
+ * silenciosamente noutra (foi exatamente o que aconteceu: "Cód." apareceu em
+ * x≈272 num PDF e x≈335 noutro). O cabeçalho sempre existe, então usamos ele
+ * como referência a cada importação.
+ */
+function detectarColunasPdf(items){
+  const mapa = {
+    'Produto': 'produto',
+    'Cód. (SKU/GTIN)': 'codigo',
+    'Qtd.': 'qtd',
+    'Un.': 'un',
+    'Localização': 'localizacao',
+    'Anotações': 'anotacoes'
+  };
+  const cols = {};
+  items.forEach(it => {
+    const nome = mapa[it.str];
+    if(nome && cols[nome] === undefined) cols[nome] = it.x;
+  });
+  return cols;
+}
+
+function pdfColumnFor(x, cols){
+  if(x < 100) return 'checkbox';
+  const nomes = Object.keys(cols || {});
+  if(nomes.length >= 2){
+    let melhor = nomes[0];
+    let menorDist = Math.abs(x - cols[melhor]);
+    for(const n of nomes){
+      const d = Math.abs(x - cols[n]);
+      if(d < menorDist){ menorDist = d; melhor = n; }
+    }
+    return melhor;
+  }
+  // Sem cabeçalho detectado (raro): faixas fixas calibradas manualmente como último recurso.
+  if(x < 200) return 'produto';
+  if(x < 345) return 'codigo';
+  if(x < 373) return 'qtd';
+  if(x < 383) return 'un';
+  if(x < 460) return 'localizacao';
   return 'anotacoes';
 }
 
 function parseSeparationItems(items){
+  const cols = detectarColunasPdf(items);
   const rows = [];
   let cur = null;
 
@@ -1452,7 +1497,8 @@ function parseSeparationItems(items){
 
   for(const it of items){
     if(PDF_HEADER_LABELS.has(it.str)) continue;
-    const col = pdfColumnFor(it.x);
+    if(isPdfNoise(it.str)) continue;
+    const col = pdfColumnFor(it.x, cols);
 
     if(col === 'produto'){
       if(cur && cur.qtd) flush();
