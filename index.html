@@ -152,6 +152,7 @@
         <div class="font-black text-sm">Itens extraídos (<span id="pdf-count">0</span>)</div>
         <button id="btn-add-row" class="text-[11px] font-bold text-brand-blue">+ linha manual</button>
       </div>
+      <div id="pdf-aviso-suspeita" class="hidden bg-brand-red/10 border border-brand-red/40 rounded-xl p-2.5 text-[11px] text-red-200 font-bold"></div>
       <div id="pdf-preview-list" class="space-y-1.5 max-h-[46vh] overflow-y-auto pr-1"></div>
       <div class="grid grid-cols-2 gap-2 pt-1">
         <button id="btn-cancelar-import" class="min-h-[48px] rounded-xl bg-brand-card border border-brand-border font-black text-sm">Cancelar</button>
@@ -1344,6 +1345,9 @@ $('input-pdf').addEventListener('change', async e => {
     }
     if(leitura.paginasComErro.length) toast(`Atenção: ${leitura.paginasComErro.length} página(s) do PDF não foram lidas — confira a lista antes de enviar`, 'warn');
 
+    const suspeitas = rows.filter(linhaSuspeita).length;
+    if(suspeitas) toast(`⚠ ${suspeitas} item(ns) com descrição muito longa — pode ser mais de um produto misturado. Revise antes de enviar.`, 'warn');
+
     state.pdfRows = rows.length ? rows : [emptyPdfRow()];
     renderPdfPreview();
     $('pdf-preview-wrap').classList.remove('hidden');
@@ -1528,11 +1532,29 @@ function parseSeparationItems(items){
   });
 }
 
+// Se a descrição de uma linha ficou gigante, é o sintoma mais comum de vários
+// produtos terem sido grudados num item só (já aconteceu 2x por causas
+// diferentes — coluna deslocada e rodapé de impressão). Não sabemos detectar
+// TODA falha de extração automaticamente, mas essa é fácil de flagrar.
+const PDF_DESCRICAO_SUSPEITA_LEN = 180;
+
+function linhaSuspeita(r){
+  return String(r.descricao||'').length > PDF_DESCRICAO_SUSPEITA_LEN;
+}
+
 function renderPdfPreview(){
   $('pdf-count').textContent = state.pdfRows.length;
+  const suspeitas = state.pdfRows.filter(linhaSuspeita).length;
+  const avisoBox = $('pdf-aviso-suspeita');
+  if(avisoBox){
+    avisoBox.classList.toggle('hidden', !suspeitas);
+    if(suspeitas) avisoBox.textContent = `⚠ ${suspeitas} linha(s) com descrição muito longa — provável sinal de produtos diferentes misturados num item só. Revise com atenção antes de enviar (destacadas em vermelho abaixo).`;
+  }
+
   const box = $('pdf-preview-list');
   box.innerHTML = state.pdfRows.map((r, idx) => `
-    <div class="bg-brand-card2 border border-brand-border rounded-xl p-2 space-y-1.5" data-row="${idx}">
+    <div class="bg-brand-card2 border ${linhaSuspeita(r) ? 'border-brand-red' : 'border-brand-border'} rounded-xl p-2 space-y-1.5" data-row="${idx}">
+      ${linhaSuspeita(r) ? `<div class="text-[10px] text-red-300 font-bold">⚠ Descrição muito longa — confira se não são vários produtos juntos</div>` : ''}
       <div class="grid grid-cols-12 gap-1.5 items-center">
         ${r.foto ? `<img src="${esc(r.foto)}" class="col-span-12 w-full max-h-28 object-contain rounded-lg bg-black/30 border border-brand-border" alt="">` : ''}
         <input class="f-sku col-span-3 bg-black/40 border border-brand-border rounded-lg px-2 py-2 text-xs font-black" placeholder="SKU" value="${esc(r.sku)}">
@@ -1812,7 +1834,7 @@ async function startHtml5Live(){
   region.innerHTML = '';
   const config = {
     fps: isIOS() ? 8 : 12,
-    qrbox: (w,h) => ({ width: Math.max(220, Math.floor(Math.min(w*.88,420))), height: Math.max(90, Math.floor(Math.min(h*.28,150))) }),
+    qrbox: (w,h) => ({ width: Math.max(240, Math.floor(Math.min(w*.9,460))), height: Math.max(160, Math.floor(Math.min(h*.5,320))) }),
     aspectRatio: 1.7777778
   };
   const formats = html5Formats();
