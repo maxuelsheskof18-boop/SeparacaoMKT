@@ -1392,7 +1392,7 @@ async function extractRowsFromPdfBuffer(buf, onProgress){
       content.items.forEach(it => {
         const str = (it.str || '').trim();
         if(!str) return;
-        allItems.push({ x: it.transform[4], str });
+        allItems.push({ x: it.transform[4], y: it.transform[5], str });
       });
     }catch(err){
       console.warn(`Falha ao ler a página ${p}/${totalPaginas} do PDF:`, err);
@@ -1435,6 +1435,16 @@ function isPdfNoise(str){
   return PDF_NOISE_PATTERNS.some(re => re.test(str));
 }
 
+// O checkbox de cada linha é um glifo real de fonte de ícones (Private Use
+// Area do Unicode, ex: U+F0C8) — não um espaço em branco nem uma posição X
+// fixa. Detectar pelo CONTEÚDO em vez de "x < 100" evita o bug descoberto
+// num PDF real onde a própria coluna "Produto" caía em x≈76 (< 100), fazendo
+// todo nome de produto ser classificado como checkbox e descartado.
+const PDF_PUA_REGEX = /^[\u{E000}-\u{F8FF}\u{F0000}-\u{FFFFD}\u{100000}-\u{10FFFD}]+$/u;
+function isCheckboxGlyph(str){
+  return PDF_PUA_REGEX.test(str);
+}
+
 /**
  * Detecta a posição X real de cada coluna pelo PRÓPRIO cabeçalho desse PDF,
  * em vez de usar posições fixas em pixel. Exportações diferentes (impressão
@@ -1454,15 +1464,18 @@ function detectarColunasPdf(items){
     'Anotações': 'anotacoes'
   };
   const cols = {};
+  let headerY = null;
   items.forEach(it => {
     const nome = mapa[it.str];
-    if(nome && cols[nome] === undefined) cols[nome] = it.x;
+    if(nome && cols[nome] === undefined){
+      cols[nome] = it.x;
+      if(headerY === null || it.y > headerY) headerY = it.y;
+    }
   });
-  return cols;
+  return { cols, headerY };
 }
 
 function pdfColumnFor(x, cols){
-  if(x < 100) return 'checkbox';
   const nomes = Object.keys(cols || {});
   if(nomes.length >= 2){
     let melhor = nomes[0];
@@ -1483,7 +1496,7 @@ function pdfColumnFor(x, cols){
 }
 
 function parseSeparationItems(items){
-  const cols = detectarColunasPdf(items);
+  const { cols, headerY } = detectarColunasPdf(items);
   const rows = [];
   let cur = null;
 
@@ -1512,6 +1525,11 @@ function parseSeparationItems(items){
   for(const it of items){
     if(PDF_HEADER_LABELS.has(it.str)) continue;
     if(isPdfNoise(it.str)) continue;
+    if(isCheckboxGlyph(it.str)) continue;
+    // Qualquer fragmento na mesma altura do cabeçalho ou acima dele (nome da
+    // empresa, CNPJ, logo, título) nunca é dado de produto — a tabela sempre
+    // começa abaixo da própria linha de cabeçalho detectada.
+    if(headerY !== null && it.y >= headerY) continue;
     const col = pdfColumnFor(it.x, cols);
 
     if(col === 'produto'){
