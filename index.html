@@ -188,6 +188,11 @@
       <input id="busca-separados" placeholder="Filtrar por SKU, produto ou pedido/conta" autocomplete="off"
         class="w-full bg-black/40 border border-brand-border rounded-xl px-3 py-3 text-center text-xs font-bold outline-none focus:border-brand-blue">
     </div>
+    <div class="flex gap-2">
+      <input id="separados-data" type="date" class="flex-1 bg-brand-card border border-brand-border rounded-xl px-3 py-2.5 text-xs font-bold outline-none focus:border-brand-blue">
+      <button id="btn-separados-hoje" class="shrink-0 min-h-[42px] px-3 rounded-xl bg-brand-card2 border border-brand-border font-bold text-xs">Hoje</button>
+      <button id="btn-separados-todos" class="shrink-0 min-h-[42px] px-3 rounded-xl bg-brand-card2 border border-brand-border font-bold text-xs">Todos</button>
+    </div>
     <div id="separados-count" class="text-[11px] text-slate-500 text-center"></div>
     <div id="lista-separados" class="space-y-2"></div>
   </section>
@@ -1128,10 +1133,25 @@ function separadoCardHtml(item){
   </div>`;
 }
 
+// YYYY-MM-DD no fuso local (não UTC) — usado pelo <input type="date"> e para
+// comparar com dataHoraSeparado (timestamp) dia a dia.
+function dataLocalISO(ts){
+  const d = new Date(ts);
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+}
+function hojeISO(){ return dataLocalISO(nowTs()); }
+
+$('separados-data').value = hojeISO();
+
 function renderSeparados(){
   const termo = ($('busca-separados').value || '').trim().toLowerCase();
   const termoCode = normalizeCode(termo);
+  const dataFiltro = $('separados-data').value;
   let arr = itemsArray().filter(i => i.status === 'separado' && passaGalpao(i));
+
+  if(dataFiltro){
+    arr = arr.filter(i => i.dataHoraSeparado && dataLocalISO(i.dataHoraSeparado) === dataFiltro);
+  }
 
   if(termo){
     arr = arr.filter(i => {
@@ -1146,16 +1166,20 @@ function renderSeparados(){
 
   arr.sort((a,b) => (b.dataHoraSeparado||0) - (a.dataHoraSeparado||0));
 
-  $('separados-count').textContent = arr.length ? `${arr.length} item(ns) separado(s)` : '';
+  const sufixoData = dataFiltro ? (dataFiltro === hojeISO() ? ' hoje' : ` em ${dataFiltro.split('-').reverse().join('/')}`) : '';
+  $('separados-count').textContent = arr.length ? `${arr.length} item(ns) separado(s)${sufixoData}` : '';
   const box = $('lista-separados');
   if(!arr.length){
-    box.innerHTML = `<div class="text-center text-slate-500 text-xs border border-dashed border-brand-border rounded-xl p-6">Nenhum item separado${termo ? ' com esse filtro' : ' ainda'}.</div>`;
+    box.innerHTML = `<div class="text-center text-slate-500 text-xs border border-dashed border-brand-border rounded-xl p-6">Nenhum item separado${sufixoData || (termo ? ' com esse filtro' : '')}.</div>`;
   } else {
     box.innerHTML = arr.map(separadoCardHtml).join('');
   }
 }
 
 $('busca-separados').addEventListener('input', renderSeparados);
+$('separados-data').addEventListener('change', renderSeparados);
+$('btn-separados-hoje').addEventListener('click', () => { $('separados-data').value = hojeISO(); renderSeparados(); });
+$('btn-separados-todos').addEventListener('click', () => { $('separados-data').value = ''; renderSeparados(); });
 
 /* =========================================================================
  * SOBRAS — produto separado que não chegou a ser embalado (motivo + histórico)
@@ -1597,7 +1621,14 @@ function parseSeparationItems(items){
     if(cur && (cur.codigos.length || cur.nome.length)){
       const descricao = cur.nome.join(' ').replace(/\s+/g, ' ').trim();
       const codigos = [...new Set(cur.codigos)];
-      const sku = codigos[codigos.length - 1] || '';
+      // O PRIMEIRO código da linha é o SKU interno/único por variante — em
+      // todo PDF real analisado ele nunca mudou entre exportações. O SEGUNDO
+      // código (GTIN/barra) às vezes é reaproveitado pelo catálogo do Tiny
+      // entre variantes de cor diferentes (ex: "BRANCO E ROSA" e "PRETO" com
+      // o mesmo código de barras), então NÃO é confiável como identificador
+      // único — usá-lo como SKU já causou dois produtos diferentes serem
+      // tratados como o mesmo item na fila.
+      const sku = codigos[0] || '';
       const qty = parseFloat(String(cur.qtd).replace(',', '.')) || 0;
       if(sku || descricao){
         rows.push({
@@ -1734,32 +1765,19 @@ $('btn-confirmar-import').addEventListener('click', async () => {
   // Só junta em itens 'pendente' (nunca em 'revisao', que já está com um
   // problema em aberto e merece ser resolvido isoladamente).
   //
-  // "Mesmo produto" NÃO pode ser só "sku exatamente igual": o campo sku é
-  // escolhido como "o último código listado na linha do PDF", e o mesmo
-  // produto às vezes aparece com 1 código, às vezes com 2 (SKU interno +
-  // GTIN/barra) dependendo da exportação — então o código escolhido como
-  // "principal" pode mudar entre importações mesmo sendo o mesmo produto.
-  // Por isso comparamos por SOBREPOSIÇÃO de qualquer código (sku OU
-  // qualquer codigoAlternativo dos dois lados), não igualdade exata do sku.
-  function codigosDoItem(obj){
-    const set = new Set();
-    if(obj.sku) set.add(normalizeCode(obj.sku));
-    if(Array.isArray(obj.codigosAlternativos)) obj.codigosAlternativos.forEach(c => set.add(normalizeCode(c)));
-    return set;
-  }
-  function temCodigoEmComum(setA, obj){
-    const setB = codigosDoItem(obj);
-    for(const c of setA) if(setB.has(c)) return true;
-    return false;
-  }
-
+  // Comparamos por SKU exato (não por sobreposição de qualquer código): o
+  // sku agora é sempre o PRIMEIRO código da linha do PDF, que é estável e
+  // único por variante. Comparar por qualquer código em comum já causou
+  // produtos DIFERENTES (cores diferentes) serem fundidos num item só,
+  // porque o catálogo do Tiny às vezes reaproveita o SEGUNDO código (GTIN)
+  // entre variantes — esse segundo código não identifica o produto sozinho.
   const updates = {};
   let unificados = 0;
 
   rows.forEach(r => {
     const galpao = r.galpao || GALPOES[0];
     const qtdNova = Number(r.quantidade) || 1;
-    const codigosNovo = codigosDoItem(r);
+    const skuNorm = normalizeCode(r.sku);
 
     // Procura primeiro nos itens já criados/atualizados NESTE lote (mesmo
     // PDF), depois nos itens pendentes já existentes no Firebase.
@@ -1767,10 +1785,10 @@ $('btn-confirmar-import').addEventListener('click', async () => {
     for(const id of Object.keys(updates)){
       const cand = updates[id];
       if(cand.status !== 'pendente' || (cand.galpao || GALPOES[0]) !== galpao) continue;
-      if(temCodigoEmComum(codigosNovo, cand)){ existenteId = id; break; }
+      if(normalizeCode(cand.sku) === skuNorm){ existenteId = id; break; }
     }
     if(!existenteId){
-      const achado = itemsArray().find(i => i.status === 'pendente' && (i.galpao || GALPOES[0]) === galpao && temCodigoEmComum(codigosNovo, i));
+      const achado = itemsArray().find(i => i.status === 'pendente' && (i.galpao || GALPOES[0]) === galpao && normalizeCode(i.sku) === skuNorm);
       if(achado) existenteId = achado.id;
     }
 
@@ -1783,12 +1801,12 @@ $('btn-confirmar-import').addEventListener('click', async () => {
         : [{ importId: atual.importId, identificacao: atual.identificacao || '', quantidade: qtdAtual }];
       pedidosAtuais.push({ importId, identificacao, quantidade: qtdNova });
 
-      // União dos códigos conhecidos (não só os do item que já existia) —
-      // assim, se essa nova linha trouxe um código que a versão anterior não
-      // tinha, a próxima importação também vai reconhecer o produto por ele.
+      // União dos códigos alternativos conhecidos (mesmo sku, mas o GTIN
+      // listado pode variar de exportação pra exportação).
       const codigosUnidos = new Set(Array.isArray(atual.codigosAlternativos) ? atual.codigosAlternativos.map(normalizeCode) : []);
       if(atual.sku) codigosUnidos.add(normalizeCode(atual.sku));
-      codigosNovo.forEach(c => codigosUnidos.add(c));
+      (Array.isArray(r.codigosAlternativos) ? r.codigosAlternativos : []).forEach(c => codigosUnidos.add(normalizeCode(c)));
+      if(skuNorm) codigosUnidos.add(skuNorm);
       codigosUnidos.delete('');
 
       updates[existenteId] = Object.assign({}, atual, {
@@ -1860,18 +1878,47 @@ function renderImportacoes(){
       const id = btn.closest('[data-import-id]').dataset.importId;
       const imp = state.importacoes[id];
       if(!imp) return;
-      const itensImport = itemsArray().filter(it => it.importId === id);
-      const pendentes = itensImport.filter(it => it.status === 'pendente' || it.status === 'revisao');
-      const outros = itensImport.length - pendentes.length;
 
-      const msg = `Remover esta importação (${itensImport.length} item(ns))?\n\n` +
-        `${pendentes.length} item(ns) pendente(s)/em revisão serão removidos da fila.` +
-        (outros > 0 ? `\n${outros} item(ns) já separado(s) ou com falta definitiva serão MANTIDOS como histórico.` : '') +
+      const todos = itemsArray();
+      // Itens CRIADOS por essa importação — saem inteiros, seja qual for o
+      // status (inclusive já separados: remover a importação é "desfazer"
+      // ela por completo, não só a parte que ainda não foi separada).
+      const criadosPorEssaImport = todos.filter(it => it.importId === id);
+      // Itens criados por OUTRA importação mas que receberam quantidade
+      // unificada dessa (ex: mesmo produto importado de novo antes de ser
+      // separado) — só dá pra tirar a parte dela se o item ainda está
+      // pendente; se já foi separado, a separação já aconteceu em conjunto
+      // e não dá pra desfazer só uma fração dela com segurança.
+      const comContribuicaoPendente = todos.filter(it =>
+        it.importId !== id && it.status === 'pendente' &&
+        Array.isArray(it.pedidosAgrupados) && it.pedidosAgrupados.some(p => p.importId === id)
+      );
+
+      const separadosNaImport = criadosPorEssaImport.filter(it => it.status === 'separado').length;
+
+      const msg = `Remover esta importação (${criadosPorEssaImport.length} item(ns))?\n\n` +
+        `Todos os itens dela saem da fila e do histórico — inclusive os ${separadosNaImport} já separado(s).` +
+        (comContribuicaoPendente.length ? `\n${comContribuicaoPendente.length} item(ns) unificados com outra importação (ainda pendentes) vão ter só a quantidade dessa importação subtraída.` : '') +
         `\n\nDepois de remover, o mesmo PDF pode ser importado de novo sem aviso de duplicidade.`;
       if(!confirm(msg)) return;
 
       const updates = {};
-      pendentes.forEach(it => { updates[`${PATH_FILA}/${it.id}`] = null; });
+      criadosPorEssaImport.forEach(it => { updates[`${PATH_FILA}/${it.id}`] = null; });
+
+      comContribuicaoPendente.forEach(it => {
+        const pedidosRestantes = it.pedidosAgrupados.filter(p => p.importId !== id);
+        const qtdRemovida = it.pedidosAgrupados
+          .filter(p => p.importId === id)
+          .reduce((soma, p) => soma + (Number(p.quantidade) || 0), 0);
+        if(!pedidosRestantes.length){
+          updates[`${PATH_FILA}/${it.id}`] = null;
+        } else {
+          updates[`${PATH_FILA}/${it.id}/pedidosAgrupados`] = pedidosRestantes;
+          updates[`${PATH_FILA}/${it.id}/qtdPedida`] = Math.max(0, Number(it.qtdPedida || 0) - qtdRemovida);
+          updates[`${PATH_FILA}/${it.id}/atualizadoEm`] = nowTs();
+        }
+      });
+
       updates[`${PATH_IMPORT}/${id}/status`] = 'removido';
       updates[`${PATH_IMPORT}/${id}/removidoEm`] = nowTs();
       updates[`${PATH_IMPORT}/${id}/removidoPor`] = state.operador ? state.operador.nome : '';
