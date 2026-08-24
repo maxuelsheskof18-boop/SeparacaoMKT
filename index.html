@@ -86,6 +86,7 @@
     <button data-tab="revisao" class="tab-btn shrink-0 min-h-[38px] px-3 rounded-xl text-[11px] font-black bg-brand-card text-slate-300 border border-brand-border">Revisão <span id="badge-revisao" class="hidden ml-1 bg-brand-yellow text-black rounded-full px-1.5">0</span></button>
     <button data-tab="importar" class="tab-btn shrink-0 min-h-[38px] px-3 rounded-xl text-[11px] font-black bg-brand-card text-slate-300 border border-brand-border">Importar</button>
     <button data-tab="produtividade" class="tab-btn shrink-0 min-h-[38px] px-3 rounded-xl text-[11px] font-black bg-brand-card text-slate-300 border border-brand-border">📊 Produtividade</button>
+    <button data-tab="separados" class="tab-btn shrink-0 min-h-[38px] px-3 rounded-xl text-[11px] font-black bg-brand-card text-slate-300 border border-brand-border">✅ Separados</button>
     <button data-tab="sobras" class="tab-btn shrink-0 min-h-[38px] px-3 rounded-xl text-[11px] font-black bg-brand-card text-slate-300 border border-brand-border">📦 Sobras</button>
     <button data-tab="pausar" class="tab-btn shrink-0 min-h-[38px] px-3 rounded-xl text-[11px] font-black bg-brand-card text-slate-300 border border-brand-border">🔒 Anúncios</button>
   </nav>
@@ -179,6 +180,16 @@
     <div class="bg-brand-card border border-brand-border rounded-xl p-3 text-[10px] text-slate-500 leading-relaxed">
       <b class="text-slate-400">Como funciona a penalidade:</b> quando um operador marca "Não Encontrado" e depois <b>outro</b> operador acha e separa o mesmo item, isso conta como uma penalidade para quem disse que não tinha. Corrigir seu próprio "Não Encontrado" não gera penalidade.
     </div>
+  </section>
+
+  <!-- ============ VIEW: SEPARADOS ============ -->
+  <section id="view-separados" class="view-panel hidden space-y-3">
+    <div class="bg-brand-card border border-brand-border rounded-xl p-2.5">
+      <input id="busca-separados" placeholder="Filtrar por SKU, produto ou pedido/conta" autocomplete="off"
+        class="w-full bg-black/40 border border-brand-border rounded-xl px-3 py-3 text-center text-xs font-bold outline-none focus:border-brand-blue">
+    </div>
+    <div id="separados-count" class="text-[11px] text-slate-500 text-center"></div>
+    <div id="lista-separados" class="space-y-2"></div>
   </section>
 
   <!-- ============ VIEW: SOBRAS ============ -->
@@ -636,8 +647,9 @@ function switchTab(tab){
     b.className = 'tab-btn shrink-0 min-h-[38px] px-3 rounded-xl text-[11px] font-black ' +
       (active ? 'bg-brand-orange text-black' : 'bg-brand-card text-slate-300 border border-brand-border');
   });
-  $('fab-bipar').classList.toggle('hidden', tab === 'importar' || tab === 'pausar' || tab === 'produtividade' || tab === 'sobras');
+  $('fab-bipar').classList.toggle('hidden', tab === 'importar' || tab === 'pausar' || tab === 'produtividade' || tab === 'sobras' || tab === 'separados');
   if(tab === 'produtividade') renderProdutividade();
+  if(tab === 'separados') renderSeparados();
   if(tab === 'sobras') renderSobras();
 }
 
@@ -655,6 +667,7 @@ function renderAll(){
   renderRevisao();
   renderPausar();
   if(!$('view-produtividade').classList.contains('hidden')) renderProdutividade();
+  if(!$('view-separados').classList.contains('hidden')) renderSeparados();
   if(!$('view-sobras').classList.contains('hidden')) renderSobras();
 }
 
@@ -674,6 +687,22 @@ function passaGalpao(item){
   return state.galpaoFiltro === 'todos' || item.galpao === state.galpaoFiltro;
 }
 
+// Bloco de detalhamento "quanto vai pra cada pedido/local", usado na Fila e
+// na aba Separados — o mesmo item pode ter sido unificado de vários PDFs
+// importados (ex: 3 locais de separação diferentes), e o operador precisa
+// ver essa divisão SEM precisar abrir o item.
+function pedidosBreakdownHtml(item){
+  const pedidos = Array.isArray(item.pedidosAgrupados) ? item.pedidosAgrupados : [];
+  if(pedidos.length <= 1) return '';
+  return `
+    <div class="bg-sky-500/10 border border-sky-500/30 rounded-lg p-2">
+      <div class="text-[9px] text-sky-300 font-black uppercase mb-1">🔗 Quantidade por pedido/local</div>
+      <div class="text-[11px] text-sky-100 space-y-0.5">
+        ${pedidos.map(p => `<div class="flex items-center justify-between gap-2"><span class="truncate">${esc(p.identificacao || 'Sem identificação')}</span><span class="font-black shrink-0">${fmtQty(p.quantidade)} un.</span></div>`).join('')}
+      </div>
+    </div>`;
+}
+
 function itemCardHtml(item){
   const statusTag = {
     pendente: '',
@@ -690,21 +719,24 @@ function itemCardHtml(item){
   const lock = lockOutro ? `<span class="tag-pill bg-purple-500/15 text-purple-300 border border-purple-500/30">🔒 ${esc(item.emSeparacaoPor)}</span>` : '';
 
   return `
-  <div class="bg-brand-card border ${item.status==='revisao' ? 'border-brand-yellow/50' : 'border-brand-border'} rounded-xl p-3 flex items-center justify-between gap-2" data-item-id="${item.id}">
-    <div class="flex items-center gap-2 min-w-0">
-      ${foto}
-      <div class="min-w-0">
-        <div class="flex items-center gap-1.5 flex-wrap">
-          <span class="font-black text-sm">${esc(item.sku)}</span>
-          ${statusTag}
-          ${grupo}
-          ${lock}
+  <div class="bg-brand-card border ${item.status==='revisao' ? 'border-brand-yellow/50' : 'border-brand-border'} rounded-xl p-3 space-y-2" data-item-id="${item.id}">
+    <div class="flex items-center justify-between gap-2">
+      <div class="flex items-center gap-2 min-w-0">
+        ${foto}
+        <div class="min-w-0">
+          <div class="flex items-center gap-1.5 flex-wrap">
+            <span class="font-black text-sm">${esc(item.sku)}</span>
+            ${statusTag}
+            ${grupo}
+            ${lock}
+          </div>
+          <div class="text-[11px] text-slate-400 truncate">${esc(item.descricao||'')}</div>
+          <div class="text-[10px] text-slate-500 mt-0.5">${origem}${esc(item.identificacao||'Sem identificação')} · ${esc(item.galpao||'--')} · Qtd ${fmtQty(item.qtdPedida)}</div>
         </div>
-        <div class="text-[11px] text-slate-400 truncate">${esc(item.descricao||'')}</div>
-        <div class="text-[10px] text-slate-500 mt-0.5">${origem}${esc(item.identificacao||'Sem identificação')} · ${esc(item.galpao||'--')} · Qtd ${fmtQty(item.qtdPedida)}</div>
       </div>
+      <button class="btn-abrir-item shrink-0 min-h-[40px] px-3 rounded-xl bg-brand-blue text-black font-black text-xs">Abrir</button>
     </div>
-    <button class="btn-abrir-item shrink-0 min-h-[40px] px-3 rounded-xl bg-brand-blue text-black font-black text-xs">Abrir</button>
+    ${pedidosBreakdownHtml(item)}
   </div>`;
 }
 
@@ -1065,6 +1097,65 @@ function renderProdutividade(){
       ${op.penalidades > 0 ? `<span class="tag-pill bg-red-500/15 text-red-300 border border-red-500/30 shrink-0">⚠ ${op.penalidades} penalidade${op.penalidades>1?'s':''}</span>` : ''}
     </div>`).join('');
 }
+
+/* =========================================================================
+ * SEPARADOS — lista de itens já separados, com qual pedido/conta cada um
+ * pertence (a Produtividade mostra só o placar por operador, não o detalhe
+ * por produto).
+ * =======================================================================*/
+
+function separadoCardHtml(item){
+  const foto = item.foto ? `<img src="${esc(item.foto)}" class="w-11 h-11 rounded-lg object-cover bg-black/30 border border-brand-border shrink-0" alt="">` : '';
+  const sobraTag = item.sobra ? `<span class="tag-pill bg-orange-500/15 text-orange-300 border border-orange-500/30">📦 Sobra</span>` : '';
+  const quando = item.dataHoraSeparado ? new Date(item.dataHoraSeparado).toLocaleString('pt-BR') : '--';
+  return `
+  <div class="bg-brand-card border border-brand-border rounded-xl p-3 space-y-2">
+    <div class="flex items-center gap-2 min-w-0">
+      ${foto}
+      <div class="min-w-0 flex-1">
+        <div class="flex items-center gap-1.5 flex-wrap">
+          <span class="font-black text-sm">${esc(item.sku)}</span>
+          <span class="tag-pill bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">Separado</span>
+          ${sobraTag}
+        </div>
+        <div class="text-[11px] text-slate-400 truncate">${esc(item.descricao||'')}</div>
+        <div class="text-[10px] text-slate-500 mt-0.5">${esc(item.galpao||'--')}${item.localFisico ? ' · 📍 ' + esc(item.localFisico) : ''} · Qtd ${fmtQty(item.qtdSeparada)}/${fmtQty(item.qtdPedida)}</div>
+        <div class="text-[10px] text-slate-500">👤 ${esc(item.operadorSeparou||'--')} · 🕒 ${quando}</div>
+        ${!item.pedidosAgrupados || item.pedidosAgrupados.length <= 1 ? `<div class="text-[10px] text-slate-500">📋 ${esc(item.identificacao||'Sem identificação')}</div>` : ''}
+      </div>
+    </div>
+    ${pedidosBreakdownHtml(item)}
+  </div>`;
+}
+
+function renderSeparados(){
+  const termo = ($('busca-separados').value || '').trim().toLowerCase();
+  const termoCode = normalizeCode(termo);
+  let arr = itemsArray().filter(i => i.status === 'separado' && passaGalpao(i));
+
+  if(termo){
+    arr = arr.filter(i => {
+      const skuMatch = termoCode && normalizeCode(i.sku).includes(termoCode);
+      const altMatch = termoCode && Array.isArray(i.codigosAlternativos) && i.codigosAlternativos.some(c => normalizeCode(c).includes(termoCode));
+      const descMatch = (i.descricao||'').toLowerCase().includes(termo);
+      const idMatch = (i.identificacao||'').toLowerCase().includes(termo);
+      const pedidoMatch = Array.isArray(i.pedidosAgrupados) && i.pedidosAgrupados.some(p => (p.identificacao||'').toLowerCase().includes(termo));
+      return skuMatch || altMatch || descMatch || idMatch || pedidoMatch;
+    });
+  }
+
+  arr.sort((a,b) => (b.dataHoraSeparado||0) - (a.dataHoraSeparado||0));
+
+  $('separados-count').textContent = arr.length ? `${arr.length} item(ns) separado(s)` : '';
+  const box = $('lista-separados');
+  if(!arr.length){
+    box.innerHTML = `<div class="text-center text-slate-500 text-xs border border-dashed border-brand-border rounded-xl p-6">Nenhum item separado${termo ? ' com esse filtro' : ' ainda'}.</div>`;
+  } else {
+    box.innerHTML = arr.map(separadoCardHtml).join('');
+  }
+}
+
+$('busca-separados').addEventListener('input', renderSeparados);
 
 /* =========================================================================
  * SOBRAS — produto separado que não chegou a ser embalado (motivo + histórico)
@@ -1636,25 +1727,50 @@ $('btn-confirmar-import').addEventListener('click', async () => {
     criadoEm: nowTs()
   });
 
-  // Agrupa pelo mesmo SKU + galpão: se o produto já está pendente na fila (dessa
-  // importação ou de uma anterior que ainda não foi separada), soma a quantidade
-  // no MESMO item em vez de criar outro — assim o operador vai no local físico
-  // uma única vez para atender vários pedidos daquele produto, não vários.
-  // Só junta em itens 'pendente' (nunca em 'revisao', que já está com um problema
-  // em aberto e merece ser resolvido isoladamente).
+  // Agrupa pelo mesmo produto + galpão: se o produto já está pendente na fila
+  // (dessa importação ou de uma anterior que ainda não foi separada), soma a
+  // quantidade no MESMO item em vez de criar outro — assim o operador vai no
+  // local físico uma única vez para atender vários pedidos daquele produto.
+  // Só junta em itens 'pendente' (nunca em 'revisao', que já está com um
+  // problema em aberto e merece ser resolvido isoladamente).
+  //
+  // "Mesmo produto" NÃO pode ser só "sku exatamente igual": o campo sku é
+  // escolhido como "o último código listado na linha do PDF", e o mesmo
+  // produto às vezes aparece com 1 código, às vezes com 2 (SKU interno +
+  // GTIN/barra) dependendo da exportação — então o código escolhido como
+  // "principal" pode mudar entre importações mesmo sendo o mesmo produto.
+  // Por isso comparamos por SOBREPOSIÇÃO de qualquer código (sku OU
+  // qualquer codigoAlternativo dos dois lados), não igualdade exata do sku.
+  function codigosDoItem(obj){
+    const set = new Set();
+    if(obj.sku) set.add(normalizeCode(obj.sku));
+    if(Array.isArray(obj.codigosAlternativos)) obj.codigosAlternativos.forEach(c => set.add(normalizeCode(c)));
+    return set;
+  }
+  function temCodigoEmComum(setA, obj){
+    const setB = codigosDoItem(obj);
+    for(const c of setA) if(setB.has(c)) return true;
+    return false;
+  }
+
   const updates = {};
-  const jaProcessadosNoLote = {};
   let unificados = 0;
 
   rows.forEach(r => {
-    const skuNorm = normalizeCode(r.sku);
     const galpao = r.galpao || GALPOES[0];
-    const chave = skuNorm + '|' + galpao;
     const qtdNova = Number(r.quantidade) || 1;
+    const codigosNovo = codigosDoItem(r);
 
-    let existenteId = jaProcessadosNoLote[chave];
+    // Procura primeiro nos itens já criados/atualizados NESTE lote (mesmo
+    // PDF), depois nos itens pendentes já existentes no Firebase.
+    let existenteId = null;
+    for(const id of Object.keys(updates)){
+      const cand = updates[id];
+      if(cand.status !== 'pendente' || (cand.galpao || GALPOES[0]) !== galpao) continue;
+      if(temCodigoEmComum(codigosNovo, cand)){ existenteId = id; break; }
+    }
     if(!existenteId){
-      const achado = itemsArray().find(i => i.status === 'pendente' && normalizeCode(i.sku) === skuNorm && (i.galpao || GALPOES[0]) === galpao);
+      const achado = itemsArray().find(i => i.status === 'pendente' && (i.galpao || GALPOES[0]) === galpao && temCodigoEmComum(codigosNovo, i));
       if(achado) existenteId = achado.id;
     }
 
@@ -1667,12 +1783,20 @@ $('btn-confirmar-import').addEventListener('click', async () => {
         : [{ importId: atual.importId, identificacao: atual.identificacao || '', quantidade: qtdAtual }];
       pedidosAtuais.push({ importId, identificacao, quantidade: qtdNova });
 
+      // União dos códigos conhecidos (não só os do item que já existia) —
+      // assim, se essa nova linha trouxe um código que a versão anterior não
+      // tinha, a próxima importação também vai reconhecer o produto por ele.
+      const codigosUnidos = new Set(Array.isArray(atual.codigosAlternativos) ? atual.codigosAlternativos.map(normalizeCode) : []);
+      if(atual.sku) codigosUnidos.add(normalizeCode(atual.sku));
+      codigosNovo.forEach(c => codigosUnidos.add(c));
+      codigosUnidos.delete('');
+
       updates[existenteId] = Object.assign({}, atual, {
         qtdPedida: qtdAtual + qtdNova,
         pedidosAgrupados: pedidosAtuais,
+        codigosAlternativos: [...codigosUnidos],
         atualizadoEm: nowTs()
       });
-      jaProcessadosNoLote[chave] = existenteId;
     } else {
       const itemRef = db.ref(PATH_FILA).push();
       updates[itemRef.key] = {
@@ -1693,7 +1817,6 @@ $('btn-confirmar-import').addEventListener('click', async () => {
         criadoEm: nowTs(),
         atualizadoEm: nowTs()
       };
-      jaProcessadosNoLote[chave] = itemRef.key;
     }
   });
   await db.ref(PATH_FILA).update(updates);
