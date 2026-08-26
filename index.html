@@ -953,6 +953,7 @@ $('btn-confirmar-separacao').addEventListener('click', async () => {
         toast(`✔ ${item.sku} separado com sucesso`, 'ok');
       }
       vibrate(90);
+      verificarConclusaoImportacoes(Object.assign({ id: item.id }, salvo)).catch(()=>{});
     }
   } catch(e){
     toast('Erro ao salvar: ' + (e.message||e), 'error');
@@ -991,7 +992,11 @@ $('btn-nao-encontrado').addEventListener('click', async () => {
       return; // outro status: aborta
     });
     if(result.committed){
-      finalStatus = result.snapshot.val() && result.snapshot.val().status;
+      const salvo = result.snapshot.val() || {};
+      finalStatus = salvo.status;
+      if(finalStatus === 'falta_definitiva'){
+        verificarConclusaoImportacoes(Object.assign({ id: item.id }, salvo)).catch(()=>{});
+      }
     } else {
       toast('Este item já foi atualizado por outro operador.', 'warn');
     }
@@ -1091,16 +1096,26 @@ function renderProdutividade(){
     return;
   }
   box.innerHTML = dados.map((op, idx) => `
-    <div class="bg-brand-card border ${op.penalidades>0 ? 'border-brand-red/40' : 'border-brand-border'} rounded-xl p-3 flex items-center justify-between gap-2">
+    <button class="btn-prod-operador w-full text-left bg-brand-card border ${op.penalidades>0 ? 'border-brand-red/40' : 'border-brand-border'} rounded-xl p-3 flex items-center justify-between gap-2 active:opacity-70" data-operador="${esc(op.nome)}">
       <div class="flex items-center gap-2 min-w-0">
         <div class="w-7 h-7 rounded-full bg-brand-card2 border border-brand-border flex items-center justify-center text-[11px] font-black shrink-0">${idx+1}º</div>
         <div class="min-w-0">
           <div class="font-black text-sm truncate">${esc(op.nome)}</div>
-          <div class="text-[10px] text-slate-500">${op.pacotes} pacote(s) separado(s)</div>
+          <div class="text-[10px] text-slate-500">${op.pacotes} pacote(s) separado(s) · toque pra ver quais</div>
         </div>
       </div>
       ${op.penalidades > 0 ? `<span class="tag-pill bg-red-500/15 text-red-300 border border-red-500/30 shrink-0">⚠ ${op.penalidades} penalidade${op.penalidades>1?'s':''}</span>` : ''}
-    </div>`).join('');
+    </button>`).join('');
+
+  box.querySelectorAll('.btn-prod-operador').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const nome = btn.dataset.operador;
+      switchTab('separados');
+      $('busca-separados').value = nome;
+      $('separados-data').value = state.prodPeriodo === 'dia' ? hojeISO() : '';
+      renderSeparados();
+    });
+  });
 }
 
 /* =========================================================================
@@ -1160,7 +1175,10 @@ function renderSeparados(){
       const descMatch = (i.descricao||'').toLowerCase().includes(termo);
       const idMatch = (i.identificacao||'').toLowerCase().includes(termo);
       const pedidoMatch = Array.isArray(i.pedidosAgrupados) && i.pedidosAgrupados.some(p => (p.identificacao||'').toLowerCase().includes(termo));
-      return skuMatch || altMatch || descMatch || idMatch || pedidoMatch;
+      // Nome do operador é comparado EXATO (não substring) — nomes curtos
+      // tipo "max" apareceriam como substring de outras coisas por acaso.
+      const opMatch = (i.operadorSeparou||'').toLowerCase() === termo;
+      return skuMatch || altMatch || descMatch || idMatch || pedidoMatch || opMatch;
     });
   }
 
@@ -1849,6 +1867,52 @@ $('btn-confirmar-import').addEventListener('click', async () => {
   switchTab('fila');
 });
 
+// Depois que um item muda pra um status final (separado ou falta definitiva),
+// confere se TODAS as listas (importações) que aquele item pertence — seja
+// porque foi criado por elas, seja porque teve quantidade unificada de outra
+// — já não têm mais nenhum item pendente/revisão. Se não tiver, marca a
+// importação como concluída com o horário exato, pra dar noção de quanto
+// tempo aquela lista levou pra ser separada por completo. "Falta definitiva"
+// também conta como final: um item confirmado como faltante por dois
+// operadores já foi totalmente resolvido, só não com sucesso.
+async function verificarConclusaoImportacoes(itemAtualizado){
+  if(!itemAtualizado) return;
+  const importIds = new Set();
+  if(itemAtualizado.importId) importIds.add(itemAtualizado.importId);
+  if(Array.isArray(itemAtualizado.pedidosAgrupados)){
+    itemAtualizado.pedidosAgrupados.forEach(p => { if(p.importId) importIds.add(p.importId); });
+  }
+  if(!importIds.size) return;
+
+  // Usa o estado local da fila, mas substitui o item que acabou de mudar
+  // pela versão nova — o listener em tempo real pode ainda não ter propagado.
+  const todos = itemsArray().map(i => i.id === itemAtualizado.id ? Object.assign({}, i, itemAtualizado) : i);
+
+  const updates = {};
+  for(const importId of importIds){
+    const imp = state.importacoes[importId];
+    if(!imp || imp.status === 'removido' || imp.concluidaEm) continue;
+
+    const relacionados = todos.filter(i =>
+      i.importId === importId ||
+      (Array.isArray(i.pedidosAgrupados) && i.pedidosAgrupados.some(p => p.importId === importId))
+    );
+    if(!relacionados.length) continue;
+    const todosFinalizados = relacionados.every(i => i.status === 'separado' || i.status === 'falta_definitiva');
+    if(todosFinalizados) updates[`${PATH_IMPORT}/${importId}/concluidaEm`] = nowTs();
+  }
+  if(Object.keys(updates).length) await db.ref().update(updates);
+}
+
+function formatarDuracao(ms){
+  if(ms < 0) ms = 0;
+  const min = Math.round(ms / 60000);
+  if(min < 60) return `${min} min`;
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  return `${h}h${m > 0 ? ' ' + m + 'min' : ''}`;
+}
+
 function renderImportacoes(){
   const arr = Object.entries(state.importacoes).map(([id,v]) => ({id, ...v})).filter(i => i.status !== 'removido');
   arr.sort((a,b) => (b.criadoEm||0)-(a.criadoEm||0));
@@ -1868,6 +1932,7 @@ function renderImportacoes(){
         <div class="text-xs font-bold truncate">${esc(i.identificacao || 'Sem identificação')} · ${esc(i.totalItens||0)} itens · ${esc(i.operador||'--')}</div>
         <div class="text-[10px] text-slate-500">${i.criadoEm ? new Date(i.criadoEm).toLocaleString('pt-BR') : ''}</div>
         <div class="text-[10px] text-slate-500 mt-0.5">${pendentes} pendente(s) · ${separados} separado(s) · ${faltando} falta(s)</div>
+        ${i.concluidaEm ? `<div class="text-[10px] text-emerald-300 font-bold mt-0.5">✅ Concluída às ${new Date(i.concluidaEm).toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'})} — levou ${formatarDuracao(i.concluidaEm - i.criadoEm)}</div>` : ''}
       </div>
       <button class="btn-remover-import shrink-0 text-[10px] font-black text-red-300 bg-red-500/10 border border-red-500/40 rounded-lg px-2.5 py-2">Remover</button>
     </div>`;
