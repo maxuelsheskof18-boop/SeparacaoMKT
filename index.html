@@ -1773,7 +1773,15 @@ $('btn-confirmar-import').addEventListener('click', async () => {
     identificacao,
     totalItens: rows.length,
     operador: state.operador ? state.operador.nome : '',
-    criadoEm: nowTs()
+    criadoEm: nowTs(),
+    // Cronômetro manual: NÃO começa sozinho na importação — só quando
+    // alguém aperta "Iniciar". 'parado' | 'rodando'. cronometroAcumulado
+    // guarda o total já rodado (ms) somando todos os ciclos play/pausa;
+    // cronometroIniciadoEm marca o início do trecho ATUAL que está rodando
+    // (null quando pausado).
+    cronometroStatus: 'parado',
+    cronometroAcumulado: 0,
+    cronometroIniciadoEm: null
   });
 
   // Agrupa pelo mesmo produto + galpão: se o produto já está pendente na fila
@@ -1899,9 +1907,32 @@ async function verificarConclusaoImportacoes(itemAtualizado){
     );
     if(!relacionados.length) continue;
     const todosFinalizados = relacionados.every(i => i.status === 'separado' || i.status === 'falta_definitiva');
-    if(todosFinalizados) updates[`${PATH_IMPORT}/${importId}/concluidaEm`] = nowTs();
+    if(!todosFinalizados) continue;
+
+    const agora = nowTs();
+    updates[`${PATH_IMPORT}/${importId}/concluidaEm`] = agora;
+    // Se o cronômetro ainda estava rodando quando o último item terminou,
+    // pausa ele automaticamente e soma o trecho final — assim "levou Xh Ymin"
+    // reflete só o tempo em que a lista esteve realmente sendo trabalhada.
+    if(imp.cronometroStatus === 'rodando' && imp.cronometroIniciadoEm){
+      const acumulado = Number(imp.cronometroAcumulado || 0) + Math.max(0, agora - imp.cronometroIniciadoEm);
+      updates[`${PATH_IMPORT}/${importId}/cronometroAcumulado`] = acumulado;
+      updates[`${PATH_IMPORT}/${importId}/cronometroStatus`] = 'parado';
+      updates[`${PATH_IMPORT}/${importId}/cronometroIniciadoEm`] = null;
+    }
   }
   if(Object.keys(updates).length) await db.ref().update(updates);
+}
+
+// Tempo total "trabalhado" nessa lista até agora: o que já foi acumulado em
+// ciclos anteriores de play/pausa, mais o trecho em andamento se estiver
+// rodando neste momento.
+function cronometroAtualMs(imp){
+  let ms = Number(imp.cronometroAcumulado || 0);
+  if(imp.cronometroStatus === 'rodando' && imp.cronometroIniciadoEm){
+    ms += Math.max(0, nowTs() - imp.cronometroIniciadoEm);
+  }
+  return ms;
 }
 
 function formatarDuracao(ms){
@@ -1911,6 +1942,19 @@ function formatarDuracao(ms){
   const h = Math.floor(min / 60);
   const m = min % 60;
   return `${h}h${m > 0 ? ' ' + m + 'min' : ''}`;
+}
+
+// Relógio tipo cronômetro (MM:SS ou H:MM:SS) pra exibição ao vivo — o
+// formatarDuracao acima (arredondado pro minuto) é bom pra "levou 12min",
+// mas fica parado demais pra quem está olhando o relógio correndo.
+function formatarRelogio(ms){
+  if(ms < 0) ms = 0;
+  const totalSeg = Math.floor(ms / 1000);
+  const h = Math.floor(totalSeg / 3600);
+  const m = Math.floor((totalSeg % 3600) / 60);
+  const s = totalSeg % 60;
+  const pad = n => String(n).padStart(2, '0');
+  return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
 }
 
 function renderImportacoes(){
@@ -1926,17 +1970,58 @@ function renderImportacoes(){
     const pendentes = itensImport.filter(it => it.status === 'pendente' || it.status === 'revisao').length;
     const separados = itensImport.filter(it => it.status === 'separado').length;
     const faltando = itensImport.filter(it => it.status === 'falta_definitiva').length;
+
+    const rodando = i.cronometroStatus === 'rodando';
+    const jaComecou = rodando || Number(i.cronometroAcumulado || 0) > 0;
+    let botaoCronometro = '';
+    if(i.concluidaEm){
+      botaoCronometro = `<span class="text-[10px] text-emerald-300 font-bold text-right">✅ Concluída às ${new Date(i.concluidaEm).toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'})}<br>levou ${formatarDuracao(cronometroAtualMs(i))}</span>`;
+    } else if(rodando){
+      botaoCronometro = `<button class="btn-pausar-cron shrink-0 text-[11px] font-black text-yellow-300 bg-yellow-500/10 border border-yellow-500/40 rounded-lg px-3 py-1.5">⏸ Pausar</button>`;
+    } else {
+      botaoCronometro = `<button class="btn-iniciar-cron shrink-0 text-[11px] font-black text-black bg-brand-green rounded-lg px-3 py-1.5">▶ ${jaComecou ? 'Retomar' : 'Iniciar'}</button>`;
+    }
+
     return `
-    <div class="bg-brand-card border border-brand-border rounded-xl p-2.5 flex items-center justify-between gap-2" data-import-id="${i.id}">
-      <div class="min-w-0">
-        <div class="text-xs font-bold truncate">${esc(i.identificacao || 'Sem identificação')} · ${esc(i.totalItens||0)} itens · ${esc(i.operador||'--')}</div>
-        <div class="text-[10px] text-slate-500">${i.criadoEm ? new Date(i.criadoEm).toLocaleString('pt-BR') : ''}</div>
-        <div class="text-[10px] text-slate-500 mt-0.5">${pendentes} pendente(s) · ${separados} separado(s) · ${faltando} falta(s)</div>
-        ${i.concluidaEm ? `<div class="text-[10px] text-emerald-300 font-bold mt-0.5">✅ Concluída às ${new Date(i.concluidaEm).toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'})} — levou ${formatarDuracao(i.concluidaEm - i.criadoEm)}</div>` : ''}
+    <div class="bg-brand-card border border-brand-border rounded-xl p-2.5 space-y-2" data-import-id="${i.id}">
+      <div class="flex items-center justify-between gap-2">
+        <div class="min-w-0">
+          <div class="text-xs font-bold truncate">${esc(i.identificacao || 'Sem identificação')} · ${esc(i.totalItens||0)} itens · ${esc(i.operador||'--')}</div>
+          <div class="text-[10px] text-slate-500">${i.criadoEm ? new Date(i.criadoEm).toLocaleString('pt-BR') : ''}</div>
+          <div class="text-[10px] text-slate-500 mt-0.5">${pendentes} pendente(s) · ${separados} separado(s) · ${faltando} falta(s)</div>
+        </div>
+        <button class="btn-remover-import shrink-0 text-[10px] font-black text-red-300 bg-red-500/10 border border-red-500/40 rounded-lg px-2.5 py-2">Remover</button>
       </div>
-      <button class="btn-remover-import shrink-0 text-[10px] font-black text-red-300 bg-red-500/10 border border-red-500/40 rounded-lg px-2.5 py-2">Remover</button>
+      <div class="flex items-center justify-between gap-2 bg-black/20 border border-brand-border rounded-lg px-2.5 py-1.5">
+        <div class="font-mono text-xs font-black text-slate-200" data-cronometro-import="${i.id}">⏱ ${formatarRelogio(cronometroAtualMs(i))}</div>
+        ${botaoCronometro}
+      </div>
     </div>`;
   }).join('');
+
+  box.querySelectorAll('.btn-iniciar-cron').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id = btn.closest('[data-import-id]').dataset.importId;
+      await db.ref(`${PATH_IMPORT}/${id}`).update({
+        cronometroStatus: 'rodando',
+        cronometroIniciadoEm: nowTs()
+      });
+    });
+  });
+
+  box.querySelectorAll('.btn-pausar-cron').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id = btn.closest('[data-import-id]').dataset.importId;
+      const imp = state.importacoes[id];
+      if(!imp || imp.cronometroStatus !== 'rodando') return;
+      const acumulado = Number(imp.cronometroAcumulado || 0) + Math.max(0, nowTs() - (imp.cronometroIniciadoEm || nowTs()));
+      await db.ref(`${PATH_IMPORT}/${id}`).update({
+        cronometroStatus: 'parado',
+        cronometroAcumulado: acumulado,
+        cronometroIniciadoEm: null
+      });
+    });
+  });
 
   box.querySelectorAll('.btn-remover-import').forEach(btn => {
     btn.addEventListener('click', async () => {
@@ -2250,6 +2335,19 @@ function boot(){
     if(!$('view-fila').classList.contains('hidden')) renderFila();
     if(!$('view-revisao').classList.contains('hidden')) renderRevisao();
   }, 20000);
+
+  // Cronômetro das importações rodando: atualiza só o texto do relógio a
+  // cada segundo, sem re-renderizar a lista inteira (evita piscar/perder
+  // posição de scroll enquanto alguém está de olho no tempo passando).
+  setInterval(() => {
+    if($('view-importar').classList.contains('hidden')) return;
+    document.querySelectorAll('[data-cronometro-import]').forEach(el => {
+      const id = el.dataset.cronometroImport;
+      const imp = state.importacoes[id];
+      if(!imp || imp.cronometroStatus !== 'rodando') return;
+      el.textContent = '⏱ ' + formatarRelogio(cronometroAtualMs(imp));
+    });
+  }, 1000);
 }
 
 document.addEventListener('DOMContentLoaded', boot);
