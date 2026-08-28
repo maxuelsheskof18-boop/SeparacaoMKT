@@ -62,11 +62,15 @@
 <header class="safe-t sticky top-0 z-40 bg-brand-bg/95 backdrop-blur border-b border-brand-border">
   <div class="max-w-lg mx-auto px-3 pt-3 pb-2">
     <div class="flex items-center justify-between gap-2">
-      <div>
-        <h1 class="text-lg font-black tracking-tight leading-none">Picking <span class="text-brand-orange">Vesco</span></h1>
-        <div class="flex items-center gap-1 mt-1">
-          <span id="conn-dot" class="w-1.5 h-1.5 rounded-full bg-slate-600"></span>
-          <span id="conn-txt" class="text-[10px] text-slate-500 font-bold">conectando...</span>
+      <div class="flex items-center gap-2">
+        <button id="btn-menu" class="shrink-0 w-9 h-9 rounded-xl bg-brand-card border border-brand-border flex items-center justify-center text-lg">☰</button>
+        <div>
+          <h1 class="text-lg font-black tracking-tight leading-none">Picking <span class="text-brand-orange">Vesco</span></h1>
+          <div class="flex items-center gap-1 mt-1">
+            <span id="conn-dot" class="w-1.5 h-1.5 rounded-full bg-slate-600"></span>
+            <span id="conn-txt" class="text-[10px] text-slate-500 font-bold">conectando...</span>
+            <span id="modulo-badge" class="ml-1 tag-pill bg-brand-orange/15 text-brand-orange border border-brand-orange/30">MKT</span>
+          </div>
         </div>
       </div>
       <button id="btn-operador" class="text-left bg-brand-card border border-brand-border rounded-xl px-3 py-2 min-w-[110px]">
@@ -84,13 +88,42 @@
   <nav class="max-w-lg mx-auto px-3 pb-2 flex gap-1.5 overflow-x-auto" style="scrollbar-width:none">
     <button data-tab="fila" class="tab-btn shrink-0 min-h-[38px] px-3 rounded-xl text-[11px] font-black bg-brand-orange text-black">Fila</button>
     <button data-tab="revisao" class="tab-btn shrink-0 min-h-[38px] px-3 rounded-xl text-[11px] font-black bg-brand-card text-slate-300 border border-brand-border">Revisão <span id="badge-revisao" class="hidden ml-1 bg-brand-yellow text-black rounded-full px-1.5">0</span></button>
-    <button data-tab="importar" class="tab-btn shrink-0 min-h-[38px] px-3 rounded-xl text-[11px] font-black bg-brand-card text-slate-300 border border-brand-border">Importar</button>
+    <button data-tab="importar" class="tab-btn modulo-mkt shrink-0 min-h-[38px] px-3 rounded-xl text-[11px] font-black bg-brand-card text-slate-300 border border-brand-border">Importar</button>
+    <button data-tab="pedidos-erp" class="tab-btn modulo-erp hidden shrink-0 min-h-[38px] px-3 rounded-xl text-[11px] font-black bg-brand-card text-slate-300 border border-brand-border">📋 Pedidos</button>
     <button data-tab="produtividade" class="tab-btn shrink-0 min-h-[38px] px-3 rounded-xl text-[11px] font-black bg-brand-card text-slate-300 border border-brand-border">📊 Produtividade</button>
     <button data-tab="separados" class="tab-btn shrink-0 min-h-[38px] px-3 rounded-xl text-[11px] font-black bg-brand-card text-slate-300 border border-brand-border">✅ Separados</button>
     <button data-tab="sobras" class="tab-btn shrink-0 min-h-[38px] px-3 rounded-xl text-[11px] font-black bg-brand-card text-slate-300 border border-brand-border">📦 Sobras</button>
-    <button data-tab="pausar" class="tab-btn shrink-0 min-h-[38px] px-3 rounded-xl text-[11px] font-black bg-brand-card text-slate-300 border border-brand-border">🔒 Anúncios</button>
+    <button data-tab="pausar" class="tab-btn modulo-mkt shrink-0 min-h-[38px] px-3 rounded-xl text-[11px] font-black bg-brand-card text-slate-300 border border-brand-border">🔒 Anúncios</button>
   </nav>
 </header>
+
+<!-- ===================== MENU LATERAL (trocar módulo) ===================== -->
+<div id="drawer-backdrop" class="hidden fixed inset-0 z-[95] bg-black/70"></div>
+<aside id="drawer-menu" class="fixed z-[96] top-0 left-0 h-full w-[78%] max-w-[300px] bg-[#070c14] border-r border-brand-border -translate-x-full transition-transform duration-200 flex flex-col">
+  <div class="p-4 border-b border-brand-border">
+    <div class="font-black text-base">Picking <span class="text-brand-orange">Vesco</span></div>
+    <div class="text-[11px] text-slate-500 mt-0.5">Escolha o módulo de separação</div>
+  </div>
+  <div class="p-3 space-y-2 flex-1 overflow-y-auto">
+    <button id="btn-modulo-mkt" class="btn-modulo w-full text-left rounded-xl border p-3 flex items-center gap-3">
+      <span class="text-2xl">🛒</span>
+      <div>
+        <div class="font-black text-sm">Separação MKT</div>
+        <div class="text-[10px] text-slate-500">Pedidos e-commerce — fila por SKU</div>
+      </div>
+    </button>
+    <button id="btn-modulo-erp" class="btn-modulo w-full text-left rounded-xl border p-3 flex items-center gap-3">
+      <span class="text-2xl">📋</span>
+      <div>
+        <div class="font-black text-sm">Separação ERP</div>
+        <div class="text-[10px] text-slate-500">Pedidos de venda (atacado) — por pedido</div>
+      </div>
+    </button>
+  </div>
+  <div class="p-3 border-t border-brand-border">
+    <button id="btn-fechar-menu" class="w-full min-h-[42px] rounded-xl bg-transparent border border-brand-border font-bold text-xs text-slate-400">Fechar</button>
+  </div>
+</aside>
 
 <main class="max-w-lg mx-auto px-3 pt-3 pb-32">
 
@@ -167,8 +200,60 @@
     </div>
   </section>
 
+  <!-- ============ VIEW: PEDIDOS (ERP) ============ -->
+  <section id="view-pedidos-erp" class="view-panel hidden space-y-3">
+    <div class="bg-brand-card border border-dashed border-brand-blue/50 rounded-xl p-4 text-center">
+      <div class="text-3xl mb-1">📋</div>
+      <div class="font-black text-sm mb-1">Anexar Pedidos de Venda (ERP)</div>
+      <div class="text-[11px] text-slate-400 mb-3">Selecione um ou mais PDFs — cada arquivo é UM pedido completo. Se o mesmo produto aparecer em vários pedidos selecionados, o sistema soma tudo num item só de separação.</div>
+      <label class="inline-flex items-center justify-center min-h-[46px] px-5 rounded-xl bg-brand-blue text-black font-black text-sm cursor-pointer">
+        Escolher PDFs
+        <input id="input-pdf-erp" type="file" accept="application/pdf" multiple class="hidden">
+      </label>
+      <div id="pdf-erp-status" class="text-[11px] text-slate-400 mt-2"></div>
+    </div>
+
+    <div id="pdf-erp-preview-wrap" class="hidden space-y-2">
+      <div>
+        <div class="font-black text-sm mb-1">Pedidos selecionados (<span id="pdf-erp-pedidos-count">0</span>)</div>
+        <div id="pdf-erp-pedidos-list" class="space-y-1"></div>
+      </div>
+      <div class="flex items-center justify-between pt-1">
+        <div class="font-black text-sm">Itens unificados (<span id="pdf-erp-count">0</span>)</div>
+      </div>
+      <div id="pdf-erp-aviso-suspeita" class="hidden bg-brand-red/10 border border-brand-red/40 rounded-xl p-2.5 text-[11px] text-red-200 font-bold"></div>
+      <div id="pdf-erp-preview-list" class="space-y-1.5 max-h-[40vh] overflow-y-auto pr-1"></div>
+      <div class="grid grid-cols-2 gap-2 pt-1">
+        <button id="btn-cancelar-import-erp" class="min-h-[48px] rounded-xl bg-brand-card border border-brand-border font-black text-sm">Cancelar</button>
+        <button id="btn-confirmar-import-erp" class="min-h-[48px] rounded-xl bg-brand-green text-black font-black text-sm">Enviar para a fila</button>
+      </div>
+    </div>
+
+    <div>
+      <div class="font-black text-sm mb-1.5">Pedidos recentes</div>
+      <div id="lista-pedidos-erp" class="space-y-1.5"></div>
+    </div>
+  </section>
+
   <!-- ============ VIEW: PRODUTIVIDADE ============ -->
   <section id="view-produtividade" class="view-panel hidden space-y-3">
+    <div class="grid grid-cols-2 gap-2">
+      <div class="bg-brand-card border border-brand-border rounded-xl p-2.5">
+        <div class="text-[9px] text-slate-500 font-bold uppercase mb-1">📦 Pedidos concluídos</div>
+        <div class="flex items-baseline justify-between">
+          <div><span id="resumo-pedidos-hoje" class="text-lg font-black">0</span> <span class="text-[9px] text-slate-500">hoje</span></div>
+          <div><span id="resumo-pedidos-mes" class="text-lg font-black text-brand-orange">0</span> <span class="text-[9px] text-slate-500">mês</span></div>
+        </div>
+      </div>
+      <div class="bg-brand-card border border-brand-border rounded-xl p-2.5">
+        <div class="text-[9px] text-slate-500 font-bold uppercase mb-1">📋 Itens separados</div>
+        <div class="flex items-baseline justify-between">
+          <div><span id="resumo-itens-hoje" class="text-lg font-black">0</span> <span class="text-[9px] text-slate-500">hoje</span></div>
+          <div><span id="resumo-itens-mes" class="text-lg font-black text-brand-orange">0</span> <span class="text-[9px] text-slate-500">mês</span></div>
+        </div>
+      </div>
+    </div>
+
     <div class="grid grid-cols-2 gap-1.5">
       <button id="btn-prod-hoje" class="prod-periodo-btn min-h-[38px] rounded-xl text-[11px] font-black bg-brand-orange text-black">Hoje</button>
       <button id="btn-prod-mes" class="prod-periodo-btn min-h-[38px] rounded-xl text-[11px] font-black bg-brand-card text-slate-300 border border-brand-border">Por mês</button>
@@ -387,11 +472,25 @@ const FIREBASE_CONFIG = {
   appId: "1:245074138581:web:4c99629916fc2f2477195c"
 };
 
-const ROOT = 'vesco_picking';
-const PATH_FILA = `${ROOT}/fila`;
-const PATH_IMPORT = `${ROOT}/importacoes`;
-const PATH_PAUSAR = `${ROOT}/pausarAnuncios`;
-const PATH_LOCAL = `${ROOT}/localizacoes`;
+// Dois módulos de separação vivem no MESMO Firebase, em raízes diferentes:
+// "mkt" é a separação de pedidos e-commerce (fluxo original, fila por SKU
+// vinda de PDFs "Separação de mercadorias" do Tiny/Olist); "erp" é a
+// separação de pedidos de venda no atacado — cada PDF é UM pedido completo
+// (cliente, número do pedido), o operador escolhe quais pedidos separar
+// agora, e o sistema soma os SKUs repetidos entre eles, igual ao MKT.
+const ROOT_MKT = 'vesco_picking';
+const ROOT_ERP = 'vesco_picking_erp';
+const PATHS = {
+  mkt: { fila: `${ROOT_MKT}/fila`, pedidos: `${ROOT_MKT}/importacoes`, pausar: `${ROOT_MKT}/pausarAnuncios` },
+  erp: { fila: `${ROOT_ERP}/fila`, pedidos: `${ROOT_ERP}/pedidos`, pausar: null }
+};
+// Localização física é um fato do galpão, não do canal de venda — os dois
+// módulos compartilham a MESMA memória de "onde esse SKU foi visto".
+const PATH_LOCAL = `${ROOT_MKT}/localizacoes`;
+
+function pathFila(){ return PATHS[state.modulo].fila; }
+function pathPedidos(){ return PATHS[state.modulo].pedidos; }
+function pathPausar(){ return PATHS[state.modulo].pausar; }
 
 const GALPOES = ['Leopoldo', '21 de Abril', 'Cesário'];
 
@@ -415,10 +514,23 @@ function safeGet(kind, key){ try{ return (kind==='session'?window.sessionStorage
 function safeSet(kind, key, val){ try{ (kind==='session'?window.sessionStorage:window.localStorage).setItem(key, val); }catch(_){} }
 
 const state = {
-  fila: {},          // id -> item
-  importacoes: {},
-  pausar: {},
-  localizacoes: {},  // skuKey -> { sku, localFisico, galpao, atualizadoEm, atualizadoPor }
+  modulo: safeGet('local', 'picking_modulo') === 'erp' ? 'erp' : 'mkt', // 'mkt' | 'erp'
+  // Cada módulo tem sua própria fila/pedidos — os getters/setters abaixo
+  // fazem `state.fila`/`state.importacoes` (usados em todo o resto do
+  // código, sem precisar mudar cada ocorrência) sempre apontarem pro
+  // módulo ATUALMENTE ativo.
+  dados: {
+    mkt: { fila: {}, importacoes: {}, pausar: {} },
+    erp: { fila: {}, importacoes: {}, pausar: {} }
+  },
+  get fila(){ return this.dados[this.modulo].fila; },
+  set fila(v){ this.dados[this.modulo].fila = v; },
+  get importacoes(){ return this.dados[this.modulo].importacoes; },
+  set importacoes(v){ this.dados[this.modulo].importacoes = v; },
+  get pausar(){ return this.dados[this.modulo].pausar; },
+  set pausar(v){ this.dados[this.modulo].pausar = v; },
+
+  localizacoes: {},  // skuKey -> { sku, localFisico, galpao, atualizadoEm, atualizadoPor } — compartilhado entre os módulos
   operador: JSON.parse(safeGet('local', 'picking_operador') || 'null'),
   galpaoFiltro: safeGet('local', 'picking_galpao_filtro') || 'todos',
   pdfRows: [],
@@ -451,12 +563,27 @@ function isLockAtivo(item){
 
 function travarItem(item){
   if(!item || !item.id || !state.operador) return;
-  db.ref(`${PATH_FILA}/${item.id}`).update({ emSeparacaoPor: state.operador.nome, emSeparacaoDesde: nowTs() }).catch(()=>{});
+  db.ref(`${pathFila()}/${item.id}`).update({ emSeparacaoPor: state.operador.nome, emSeparacaoDesde: nowTs() }).catch(()=>{});
 }
 
 function liberarLock(item){
   if(!item || !item.id) return;
-  db.ref(`${PATH_FILA}/${item.id}`).update({ emSeparacaoPor: null, emSeparacaoDesde: null }).catch(()=>{});
+  db.ref(`${pathFila()}/${item.id}`).update({ emSeparacaoPor: null, emSeparacaoDesde: null }).catch(()=>{});
+}
+
+// Botão dedicado "🔍 Buscar": além de travar o item (mesmo lock visual do
+// "🔒 Fulano"), liga um cronômetro silencioso que NÃO expira em 3 minutos
+// como o lock — ele fica guardado até o item ser confirmado como separado,
+// pra dar o tempo real de busca nos relatórios. Não reseta se já tiver sido
+// iniciado (evita perder o cronômetro se a mesma pessoa clicar de novo).
+function iniciarBusca(item){
+  if(!item || !item.id || !state.operador) return;
+  travarItem(item);
+  if(item.buscaIniciadaEm) return;
+  db.ref(`${pathFila()}/${item.id}`).update({
+    buscaIniciadaPor: state.operador.nome,
+    buscaIniciadaEm: nowTs()
+  }).catch(()=>{});
 }
 function esc(v){ return String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c])); }
 function normalizeCode(v){ return String(v ?? '').trim().toUpperCase().replace(/\s+/g,''); }
@@ -551,21 +678,27 @@ function initFirebase(){
     $('conn-txt').textContent = ok ? 'online' : 'sem conexão';
   });
 
-  db.ref(PATH_FILA).on('value', snap => {
-    const next = snap.val() || {};
-    detectAndNotifyTransitions(state.fila, next);
-    state.fila = next;
-    renderAll();
-  });
+  // Escuta os DOIS módulos ao mesmo tempo (não só o ativo) — assim trocar
+  // de módulo no menu lateral é instantâneo, sem esperar reconectar nada.
+  ['mkt', 'erp'].forEach(modulo => {
+    db.ref(PATHS[modulo].fila).on('value', snap => {
+      const next = snap.val() || {};
+      if(modulo === state.modulo) detectAndNotifyTransitions(state.dados[modulo].fila, next);
+      state.dados[modulo].fila = next;
+      if(modulo === state.modulo) renderAll();
+    });
 
-  db.ref(PATH_IMPORT).limitToLast(15).on('value', snap => {
-    state.importacoes = snap.val() || {};
-    renderImportacoes();
-  });
+    db.ref(PATHS[modulo].pedidos).limitToLast(15).on('value', snap => {
+      state.dados[modulo].importacoes = snap.val() || {};
+      if(modulo === state.modulo) renderImportacoes();
+    });
 
-  db.ref(PATH_PAUSAR).on('value', snap => {
-    state.pausar = snap.val() || {};
-    renderPausar();
+    if(PATHS[modulo].pausar){
+      db.ref(PATHS[modulo].pausar).on('value', snap => {
+        state.dados[modulo].pausar = snap.val() || {};
+        if(modulo === state.modulo) renderPausar();
+      });
+    }
   });
 
   db.ref(PATH_LOCAL).on('value', snap => {
@@ -647,16 +780,67 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
 function switchTab(tab){
   document.querySelectorAll('.view-panel').forEach(v => v.classList.add('hidden'));
   $('view-' + tab).classList.remove('hidden');
+  // Só alterna as classes de "ativo/inativo" — NÃO reconstrói o className
+  // inteiro, senão perde as classes modulo-mkt/modulo-erp/hidden que
+  // controlam quais abas aparecem em cada módulo.
   document.querySelectorAll('.tab-btn').forEach(b => {
     const active = b.dataset.tab === tab;
-    b.className = 'tab-btn shrink-0 min-h-[38px] px-3 rounded-xl text-[11px] font-black ' +
-      (active ? 'bg-brand-orange text-black' : 'bg-brand-card text-slate-300 border border-brand-border');
+    b.classList.toggle('bg-brand-orange', active);
+    b.classList.toggle('text-black', active);
+    b.classList.toggle('bg-brand-card', !active);
+    b.classList.toggle('text-slate-300', !active);
+    b.classList.toggle('border', !active);
+    b.classList.toggle('border-brand-border', !active);
   });
-  $('fab-bipar').classList.toggle('hidden', tab === 'importar' || tab === 'pausar' || tab === 'produtividade' || tab === 'sobras' || tab === 'separados');
+  $('fab-bipar').classList.toggle('hidden', tab === 'importar' || tab === 'pedidos-erp' || tab === 'pausar' || tab === 'produtividade' || tab === 'sobras' || tab === 'separados');
   if(tab === 'produtividade') renderProdutividade();
   if(tab === 'separados') renderSeparados();
   if(tab === 'sobras') renderSobras();
 }
+
+/* =========================================================================
+ * MÓDULO (MKT / ERP) — menu lateral
+ * =======================================================================*/
+
+function abrirMenu(){
+  $('drawer-backdrop').classList.remove('hidden');
+  $('drawer-menu').classList.remove('-translate-x-full');
+}
+function fecharMenu(){
+  $('drawer-backdrop').classList.add('hidden');
+  $('drawer-menu').classList.add('-translate-x-full');
+}
+
+function atualizarUiModulo(){
+  const modulo = state.modulo;
+  document.querySelectorAll('.modulo-mkt').forEach(el => el.classList.toggle('hidden', modulo !== 'mkt'));
+  document.querySelectorAll('.modulo-erp').forEach(el => el.classList.toggle('hidden', modulo !== 'erp'));
+  $('modulo-badge').textContent = modulo === 'erp' ? 'ERP' : 'MKT';
+  $('modulo-badge').className = 'ml-1 tag-pill ' + (modulo === 'erp'
+    ? 'bg-sky-500/15 text-sky-300 border border-sky-500/30'
+    : 'bg-brand-orange/15 text-brand-orange border border-brand-orange/30');
+  $('btn-modulo-mkt').className = 'btn-modulo w-full text-left rounded-xl border p-3 flex items-center gap-3 ' +
+    (modulo === 'mkt' ? 'border-brand-orange bg-brand-orange/10' : 'border-brand-border bg-brand-card');
+  $('btn-modulo-erp').className = 'btn-modulo w-full text-left rounded-xl border p-3 flex items-center gap-3 ' +
+    (modulo === 'erp' ? 'border-sky-500 bg-sky-500/10' : 'border-brand-border bg-brand-card');
+}
+
+function switchModulo(modulo){
+  if(state.modulo !== modulo){
+    state.modulo = modulo;
+    safeSet('local', 'picking_modulo', modulo);
+    atualizarUiModulo();
+    switchTab('fila'); // volta pra Fila — a única aba garantida nos dois módulos
+    renderAll();
+  }
+  fecharMenu();
+}
+
+$('btn-menu').addEventListener('click', abrirMenu);
+$('btn-fechar-menu').addEventListener('click', fecharMenu);
+$('drawer-backdrop').addEventListener('click', fecharMenu);
+$('btn-modulo-mkt').addEventListener('click', () => switchModulo('mkt'));
+$('btn-modulo-erp').addEventListener('click', () => switchModulo('erp'));
 
 /* =========================================================================
  * RENDER: FILA / REVISÃO
@@ -720,8 +904,20 @@ function itemCardHtml(item){
   const foto = item.foto ? `<img src="${esc(item.foto)}" class="w-11 h-11 rounded-lg object-cover bg-black/30 border border-brand-border shrink-0" alt="">` : '';
   const nPedidos = Array.isArray(item.pedidosAgrupados) ? item.pedidosAgrupados.length : 1;
   const grupo = nPedidos > 1 ? `<span class="tag-pill bg-sky-500/15 text-sky-300 border border-sky-500/30">🔗 ${nPedidos} pedidos</span>` : '';
-  const lockOutro = isLockAtivo(item) && item.emSeparacaoPor !== (state.operador && state.operador.nome);
+  const lockAtivo = isLockAtivo(item);
+  const lockMeu = lockAtivo && item.emSeparacaoPor === (state.operador && state.operador.nome);
+  const lockOutro = lockAtivo && !lockMeu;
   const lock = lockOutro ? `<span class="tag-pill bg-purple-500/15 text-purple-300 border border-purple-500/30">🔒 ${esc(item.emSeparacaoPor)}</span>` : '';
+  const buscando = lockMeu ? `<span class="tag-pill bg-purple-500/15 text-purple-300 border border-purple-500/30">🔍 Você está buscando</span>` : '';
+
+  // "Buscar" declara pra todo mundo que ALGUÉM já foi atrás desse item (o
+  // outro operador não perde tempo buscando de novo) e liga um cronômetro
+  // silencioso (não aparece na tela, só é usado depois nos relatórios) que
+  // mede quanto tempo esse item levou pra ser encontrado.
+  const podeBuscar = item.status !== 'separado' && item.status !== 'falta_definitiva' && !lockOutro;
+  const btnBuscar = podeBuscar
+    ? `<button class="btn-buscar-item shrink-0 min-h-[40px] px-3 rounded-xl ${lockMeu ? 'bg-brand-card2 border border-brand-border text-slate-300' : 'bg-purple-500/15 border border-purple-500/40 text-purple-300'} font-black text-xs">${lockMeu ? '🔍 Buscando' : '🔍 Buscar'}</button>`
+    : '';
 
   return `
   <div class="bg-brand-card border ${item.status==='revisao' ? 'border-brand-yellow/50' : 'border-brand-border'} rounded-xl p-3 space-y-2" data-item-id="${item.id}">
@@ -734,12 +930,16 @@ function itemCardHtml(item){
             ${statusTag}
             ${grupo}
             ${lock}
+            ${buscando}
           </div>
           <div class="text-[11px] text-slate-400 truncate">${esc(item.descricao||'')}</div>
           <div class="text-[10px] text-slate-500 mt-0.5">${origem}${esc(item.identificacao||'Sem identificação')} · ${esc(item.galpao||'--')} · Qtd ${fmtQty(item.qtdPedida)}</div>
         </div>
       </div>
-      <button class="btn-abrir-item shrink-0 min-h-[40px] px-3 rounded-xl bg-brand-blue text-black font-black text-xs">Abrir</button>
+      <div class="flex items-center gap-1.5 shrink-0">
+        ${btnBuscar}
+        <button class="btn-abrir-item shrink-0 min-h-[40px] px-3 rounded-xl bg-brand-blue text-black font-black text-xs">Abrir</button>
+      </div>
     </div>
     ${pedidosBreakdownHtml(item)}
   </div>`;
@@ -773,6 +973,14 @@ function bindOpenButtons(box){
     btn.addEventListener('click', () => {
       const id = btn.closest('[data-item-id]').dataset.itemId;
       openConfirmModal(state.fila[id] ? { id, ...state.fila[id] } : null);
+    });
+  });
+  box.querySelectorAll('.btn-buscar-item').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.closest('[data-item-id]').dataset.itemId;
+      if(!state.operador){ ensureOperador(); return; }
+      const item = state.fila[id] ? { id, ...state.fila[id] } : null;
+      if(item) iniciarBusca(item);
     });
   });
 }
@@ -907,7 +1115,7 @@ $('btn-confirmar-separacao').addEventListener('click', async () => {
   if(qtd <= 0){ toast('Informe a quantidade separada', 'warn'); return; }
   if(!local){ toast('Informe o local físico', 'warn'); return; }
 
-  const ref = db.ref(`${PATH_FILA}/${item.id}`);
+  const ref = db.ref(`${pathFila()}/${item.id}`);
   try {
     const result = await ref.transaction(cur => {
       if(!cur) return cur;
@@ -933,6 +1141,12 @@ $('btn-confirmar-separacao').addEventListener('click', async () => {
       cur.atualizadoEm = nowTs();
       cur.emSeparacaoPor = null;
       cur.emSeparacaoDesde = null;
+      // Tempo de busca: só existe se alguém clicou "🔍 Buscar" antes de
+      // confirmar (é opcional — quem vai direto no "Abrir" e confirma sem
+      // usar o botão de busca simplesmente não gera essa métrica).
+      if(cur.buscaIniciadaEm){
+        cur.tempoBuscaMs = Math.max(0, cur.dataHoraSeparado - cur.buscaIniciadaEm);
+      }
       return cur;
     });
     if(!result.committed){
@@ -965,7 +1179,7 @@ $('btn-confirmar-separacao').addEventListener('click', async () => {
 $('btn-nao-encontrado').addEventListener('click', async () => {
   const item = state.itemAtual;
   if(!item || !state.operador) return;
-  const ref = db.ref(`${PATH_FILA}/${item.id}`);
+  const ref = db.ref(`${pathFila()}/${item.id}`);
   let finalStatus = null;
   try {
     const result = await ref.transaction(cur => {
@@ -1007,7 +1221,7 @@ $('btn-nao-encontrado').addEventListener('click', async () => {
   if(finalStatus === 'revisao'){
     toast(`${item.sku} marcado para Revisão`, 'warn');
   } else if(finalStatus === 'falta_definitiva'){
-    await db.ref(`${PATH_PAUSAR}/${item.id}`).set({
+    await db.ref(`${pathPausar()}/${item.id}`).set({
       sku: item.sku,
       descricao: item.descricao || '',
       identificacao: item.identificacao || '',
@@ -1087,7 +1301,42 @@ function computeProdutividade(){
   return Object.values(porOperador).sort((a,b) => b.pacotes - a.pacotes || a.nome.localeCompare(b.nome,'pt-BR'));
 }
 
+// Resumo geral (independente do toggle Hoje/Mês da lista por operador
+// abaixo): quantos PEDIDOS (listas/importações concluídas) e quantos ITENS
+// (linhas de produto separadas) hoje e no mês corrente.
+function computeResumoGeral(){
+  const hojeStr = new Date().toDateString();
+  const agora = new Date();
+  const mesmoMes = ts => { const d = new Date(ts); return d.getFullYear() === agora.getFullYear() && d.getMonth() === agora.getMonth(); };
+  const hoje = ts => new Date(ts).toDateString() === hojeStr;
+
+  let itensHoje = 0, itensMes = 0;
+  itemsArray().forEach(i => {
+    if(i.status !== 'separado' || !i.dataHoraSeparado) return;
+    if(hoje(i.dataHoraSeparado)) itensHoje++;
+    if(mesmoMes(i.dataHoraSeparado)) itensMes++;
+  });
+
+  let pedidosHoje = 0, pedidosMes = 0;
+  Object.values(state.importacoes).forEach(imp => {
+    if(!imp.concluidaEm) return;
+    if(hoje(imp.concluidaEm)) pedidosHoje++;
+    if(mesmoMes(imp.concluidaEm)) pedidosMes++;
+  });
+
+  return { itensHoje, itensMes, pedidosHoje, pedidosMes };
+}
+
+function renderResumoGeral(){
+  const r = computeResumoGeral();
+  $('resumo-pedidos-hoje').textContent = r.pedidosHoje;
+  $('resumo-pedidos-mes').textContent = r.pedidosMes;
+  $('resumo-itens-hoje').textContent = r.itensHoje;
+  $('resumo-itens-mes').textContent = r.itensMes;
+}
+
 function renderProdutividade(){
+  renderResumoGeral();
   atualizarBotoesPeriodo();
   const dados = computeProdutividade();
   const box = $('lista-produtividade');
@@ -1140,7 +1389,7 @@ function separadoCardHtml(item){
         </div>
         <div class="text-[11px] text-slate-400 truncate">${esc(item.descricao||'')}</div>
         <div class="text-[10px] text-slate-500 mt-0.5">${esc(item.galpao||'--')}${item.localFisico ? ' · 📍 ' + esc(item.localFisico) : ''} · Qtd ${fmtQty(item.qtdSeparada)}/${fmtQty(item.qtdPedida)}</div>
-        <div class="text-[10px] text-slate-500">👤 ${esc(item.operadorSeparou||'--')} · 🕒 ${quando}</div>
+        <div class="text-[10px] text-slate-500">👤 ${esc(item.operadorSeparou||'--')} · 🕒 ${quando}${item.tempoBuscaMs ? ` · 🔍 ${formatarRelogio(item.tempoBuscaMs)} de busca` : ''}</div>
         ${!item.pedidosAgrupados || item.pedidosAgrupados.length <= 1 ? `<div class="text-[10px] text-slate-500">📋 ${esc(item.identificacao||'Sem identificação')}</div>` : ''}
       </div>
     </div>
@@ -1256,7 +1505,7 @@ $('btn-confirmar-sobra').addEventListener('click', async () => {
   const motivo = $('sobra-motivo').value;
   const obs = $('sobra-obs').value.trim();
 
-  const ref = db.ref(`${PATH_FILA}/${item.id}`);
+  const ref = db.ref(`${pathFila()}/${item.id}`);
   try {
     const result = await ref.transaction(cur => {
       if(!cur) return cur;
@@ -1336,7 +1585,7 @@ function renderPausar(){
     box.querySelectorAll('.btn-repor').forEach(btn => {
       btn.addEventListener('click', async () => {
         const id = btn.closest('[data-pausar-id]').dataset.pausarId;
-        await db.ref(`${PATH_PAUSAR}/${id}`).update({ status: 'reposto', repostoEm: nowTs(), repostoPor: state.operador ? state.operador.nome : '' });
+        await db.ref(`${pathPausar()}/${id}`).update({ status: 'reposto', repostoEm: nowTs(), repostoPor: state.operador ? state.operador.nome : '' });
         toast('Marcado como reposto', 'ok');
       });
     });
@@ -1536,6 +1785,427 @@ async function extractRowsFromPdfBuffer(buf, onProgress){
   const rows = parseSeparationItems(allItems);
   return { rows, totalPaginas, paginasComErro };
 }
+
+/* =========================================================================
+ * PDF DO ERP — "Pedido de Venda" (um PDF = um pedido inteiro, formato
+ * diferente do romaneio "Separação de mercadorias" do MKT: tem NCM junto
+ * do código, preço/total que não interessam pra separação, e o rodapé de
+ * pagamento/observações que precisa ser ignorado). Validado com 2 pedidos
+ * reais (12 e 3 itens) — bateu 100% com o "Número de itens" impresso.
+ * =======================================================================*/
+
+const ERP_HEADER_LABELS = new Set(['Item', 'SKU | GTIN |', 'NCM', 'Qtd', 'Un', 'Preço un', 'Total']);
+const ERP_STOP_MARKER = 'Número de itens:';
+
+function isNcmNoise(str){
+  return str === 'NCM' || /^:\s*[\d.]+$/.test(str);
+}
+
+function detectarColunasErp(items){
+  const mapa = { 'Item': 'produto', 'SKU | GTIN |': 'codigo', 'Qtd': 'qtd', 'Un': 'un', 'Preço un': 'preco', 'Total': 'total' };
+  const cols = {};
+  let headerY = null;
+  for(const it of items){
+    const nome = mapa[it.str];
+    if(nome && cols[nome] === undefined){
+      cols[nome] = it.x;
+      if(headerY === null || it.y > headerY) headerY = it.y;
+    }
+  }
+  return { cols, headerY };
+}
+
+function colunaErpFor(x, cols){
+  const nomes = Object.keys(cols || {});
+  if(!nomes.length) return 'produto';
+  let melhor = nomes[0], menorDist = Math.abs(x - cols[melhor]);
+  for(const n of nomes){
+    const d = Math.abs(x - cols[n]);
+    if(d < menorDist){ menorDist = d; melhor = n; }
+  }
+  return melhor;
+}
+
+// paginas: array de páginas, cada página é um array de {x,y,str}
+function parsePedidoErp(paginas){
+  const rows = [];
+  let cur = null;
+  function blank(){ return { nome: [], codigos: [], qtd: '' }; }
+  function flush(){
+    if(cur && (cur.codigos.length || cur.nome.length)){
+      const descricao = cur.nome.join(' ').replace(/\s+/g, ' ').trim();
+      const codigos = [...new Set(cur.codigos)];
+      const sku = codigos[0] || '';
+      const qty = parseFloat(String(cur.qtd).replace(',', '.')) || 0;
+      if(sku || descricao){
+        rows.push({ sku, codigosAlternativos: codigos, descricao, quantidade: qty || 1, galpao: GALPOES[0], localizacaoOrigem: '', localFisicoSugerido: '', estoqueLocais: '', foto: '' });
+      }
+    }
+    cur = null;
+  }
+
+  outer:
+  for(const items of paginas){
+    const { cols, headerY } = detectarColunasErp(items);
+    for(const it of items){
+      if(it.str === ERP_STOP_MARKER){ flush(); break outer; }
+      if(ERP_HEADER_LABELS.has(it.str)) continue;
+      if(isNcmNoise(it.str)) continue;
+      if(headerY !== null && it.y >= headerY) continue;
+      const col = colunaErpFor(it.x, cols);
+      if(col === 'produto'){
+        if(cur && cur.qtd) flush();
+        if(!cur) cur = blank();
+        cur.nome.push(it.str);
+      } else if(col === 'codigo'){
+        if(!cur) cur = blank();
+        cur.codigos.push(it.str);
+      } else if(col === 'qtd'){
+        if(!cur) cur = blank();
+        cur.qtd = it.str;
+      }
+    }
+  }
+  flush();
+
+  const seen = new Set();
+  return rows.filter(r => {
+    const key = r.sku + '|' + r.quantidade + '|' + r.descricao;
+    if(seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+// O rótulo e o valor do cabeçalho (Cliente/Número do pedido/Data...) ficam
+// na mesma "caixa", mas duas caixas (esquerda e direita) coexistem na
+// mesma faixa de Y — por isso limitamos também a distância em X, senão o
+// valor mais próximo em Y pode vir da caixa errada.
+function valorMaisProximoErp_(items, label, janelaY, maxDx){
+  const l = items.find(it => it.str === label);
+  if(!l) return '';
+  let melhor = null, melhorDist = Infinity;
+  items.forEach(it => {
+    const dx = it.x - l.x;
+    if(dx <= 0 || dx > maxDx) return;
+    const d = Math.abs(it.y - l.y);
+    if(d > janelaY) return;
+    if(d < melhorDist){ melhorDist = d; melhor = it; }
+  });
+  return melhor ? melhor.str : '';
+}
+
+// "Cliente"/"Endereço" ocupam uma caixa de 2 linhas (nome em cima, CNPJ
+// embaixo) — o nome é sempre a linha de CIMA (Y maior), não a mais
+// próxima em distância absoluta.
+function linhaDeCimaErp_(items, label, janelaY, maxDx){
+  const l = items.find(it => it.str === label);
+  if(!l) return '';
+  let melhor = null, melhorDist = Infinity;
+  items.forEach(it => {
+    const dx = it.x - l.x;
+    if(dx <= 0 || dx > maxDx) return;
+    const dy = it.y - l.y;
+    if(dy < -1 || dy > janelaY) return;
+    if(dy < melhorDist){ melhorDist = dy; melhor = it; }
+  });
+  return melhor ? melhor.str : '';
+}
+
+function extrairCabecalhoErp(items){
+  return {
+    numeroPedido: valorMaisProximoErp_(items, 'Número do pedido', 3, 150),
+    cliente: linhaDeCimaErp_(items, 'Cliente', 8, 150),
+    data: valorMaisProximoErp_(items, 'Data', 3, 150),
+    dataPrevista: valorMaisProximoErp_(items, 'Data prevista', 3, 150)
+  };
+}
+
+async function extractPedidoErpDoBuffer(buf, onProgress){
+  const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+  const totalPaginas = pdf.numPages;
+  const paginas = [];
+  const paginasComErro = [];
+
+  for(let p = 1; p <= totalPaginas; p++){
+    if(onProgress) onProgress(p, totalPaginas);
+    try{
+      const page = await pdf.getPage(p);
+      const content = await page.getTextContent();
+      const items = [];
+      content.items.forEach(it => {
+        const str = (it.str || '').trim();
+        if(!str) return;
+        items.push({ x: it.transform[4], y: it.transform[5], str });
+      });
+      paginas.push(items);
+    }catch(err){
+      console.warn(`Falha ao ler a página ${p}/${totalPaginas} do pedido:`, err);
+      paginasComErro.push(p);
+    }
+  }
+
+  const cabecalho = paginas.length ? extrairCabecalhoErp(paginas[0]) : { numeroPedido: '', cliente: '', data: '', dataPrevista: '' };
+  const rows = parsePedidoErp(paginas);
+  return { cabecalho, rows, totalPaginas, paginasComErro };
+}
+
+/* =========================================================================
+ * ERP — seleção de vários pedidos, unificação e envio pra fila
+ * =======================================================================*/
+
+state.erpPedidosSelecionados = [];
+
+$('input-pdf-erp').addEventListener('change', async e => {
+  const files = Array.from(e.target.files || []);
+  e.target.value = '';
+  if(!files.length) return;
+
+  const pdfjsOk = await ensurePdfJs();
+  if(!pdfjsOk){
+    $('pdf-erp-status').textContent = 'Não foi possível carregar o leitor de PDF (rede instável ou bloqueada). Tente novamente.';
+    toast('Falha ao carregar o leitor de PDF', 'error');
+    return;
+  }
+
+  for(let i = 0; i < files.length; i++){
+    const file = files[i];
+    $('pdf-erp-status').textContent = `Lendo pedido ${i+1} de ${files.length} (${file.name})...`;
+    try{
+      const buf = await file.arrayBuffer();
+      const hash = await sha256Hex(buf);
+      if(state.erpPedidosSelecionados.some(p => p.hash === hash)) continue; // já está na seleção atual
+
+      const dup = Object.values(state.importacoes).find(imp => imp.hashArquivo === hash && imp.status !== 'removido');
+      if(dup && !confirm(`"${file.name}" já foi importado (pedido ${dup.numeroPedido||'?'}) e ainda está ativo. Importar de novo pode duplicar itens. Continuar mesmo assim?`)){
+        continue;
+      }
+
+      const leitura = await extractPedidoErpDoBuffer(buf);
+      if(!leitura.rows.length){
+        toast(`⚠ ${file.name}: nenhum item identificado — confira se é um "Pedido de Venda" do ERP`, 'warn');
+        continue;
+      }
+      state.erpPedidosSelecionados.push({
+        tempId: uid(),
+        fileName: file.name,
+        hash,
+        numeroPedido: leitura.cabecalho.numeroPedido || '',
+        cliente: leitura.cabecalho.cliente || '',
+        data: leitura.cabecalho.data || '',
+        dataPrevista: leitura.cabecalho.dataPrevista || '',
+        rows: leitura.rows,
+        paginasComErro: leitura.paginasComErro
+      });
+    } catch(err){
+      toast(`Erro ao ler ${file.name}: ` + (err.message || err), 'error');
+    }
+  }
+
+  $('pdf-erp-status').textContent = state.erpPedidosSelecionados.length
+    ? `${state.erpPedidosSelecionados.length} pedido(s) selecionado(s). Revise antes de enviar.`
+    : 'Nenhum pedido válido selecionado.';
+  renderPdfErpPreview();
+  $('pdf-erp-preview-wrap').classList.toggle('hidden', !state.erpPedidosSelecionados.length);
+});
+
+// Junta os itens de TODOS os pedidos selecionados: mesmo SKU vira uma linha
+// só, com a quantidade somada e a lista de quais pedidos pediram quanto.
+function computeErpItensUnificados(){
+  const porSku = {};
+  (state.erpPedidosSelecionados || []).forEach(pedido => {
+    pedido.rows.forEach(r => {
+      const key = normalizeCode(r.sku) || r.descricao;
+      if(!porSku[key]){
+        porSku[key] = { sku: r.sku, descricao: r.descricao, codigosAlternativos: new Set(), quantidade: 0, porPedido: [] };
+      }
+      const alvo = porSku[key];
+      (r.codigosAlternativos || []).forEach(c => alvo.codigosAlternativos.add(c));
+      alvo.quantidade += Number(r.quantidade) || 0;
+      alvo.porPedido.push({ numeroPedido: pedido.numeroPedido, quantidade: r.quantidade });
+    });
+  });
+  return Object.values(porSku).map(v => Object.assign({}, v, { codigosAlternativos: [...v.codigosAlternativos] }));
+}
+
+function renderPdfErpPreview(){
+  const pedidos = state.erpPedidosSelecionados || [];
+  $('pdf-erp-pedidos-count').textContent = pedidos.length;
+  $('pdf-erp-pedidos-list').innerHTML = pedidos.map(p => `
+    <div class="bg-brand-card2 border border-brand-border rounded-lg p-2 flex items-center justify-between gap-2" data-temp-id="${p.tempId}">
+      <div class="min-w-0">
+        <div class="text-xs font-bold truncate">#${esc(p.numeroPedido || '?')} — ${esc(p.cliente || 'Cliente não identificado')}</div>
+        <div class="text-[10px] text-slate-500">${p.rows.length} item(ns) · ${esc(p.fileName)}</div>
+      </div>
+      <button class="btn-remover-pedido-erp shrink-0 text-[10px] font-black text-red-300 bg-red-500/10 border border-red-500/40 rounded-lg px-2.5 py-1.5">✕</button>
+    </div>`).join('');
+
+  $('pdf-erp-pedidos-list').querySelectorAll('.btn-remover-pedido-erp').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.closest('[data-temp-id]').dataset.tempId;
+      state.erpPedidosSelecionados = state.erpPedidosSelecionados.filter(p => p.tempId !== id);
+      renderPdfErpPreview();
+      $('pdf-erp-preview-wrap').classList.toggle('hidden', !state.erpPedidosSelecionados.length);
+    });
+  });
+
+  const itens = computeErpItensUnificados();
+  $('pdf-erp-count').textContent = itens.length;
+  const suspeitas = itens.filter(linhaSuspeita).length;
+  const avisoBox = $('pdf-erp-aviso-suspeita');
+  avisoBox.classList.toggle('hidden', !suspeitas);
+  if(suspeitas) avisoBox.textContent = `⚠ ${suspeitas} item(ns) com descrição muito longa — confira antes de enviar.`;
+
+  $('pdf-erp-preview-list').innerHTML = itens.map(r => `
+    <div class="bg-brand-card2 border ${linhaSuspeita(r) ? 'border-brand-red' : 'border-brand-border'} rounded-xl p-2 space-y-1">
+      <div class="flex items-center justify-between gap-2">
+        <div class="min-w-0">
+          <div class="font-black text-xs">${esc(r.sku)}</div>
+          <div class="text-[11px] text-slate-400 truncate">${esc(r.descricao)}</div>
+        </div>
+        <div class="font-black text-sm shrink-0">${fmtQty(r.quantidade)}</div>
+      </div>
+      ${r.porPedido.length > 1 ? `<div class="text-[10px] text-sky-300">${r.porPedido.map(p => `#${esc(p.numeroPedido)}: ${fmtQty(p.quantidade)}`).join(' · ')}</div>` : ''}
+    </div>`).join('');
+}
+
+$('btn-cancelar-import-erp').addEventListener('click', () => {
+  state.erpPedidosSelecionados = [];
+  $('pdf-erp-preview-wrap').classList.add('hidden');
+  $('pdf-erp-status').textContent = '';
+});
+
+$('btn-confirmar-import-erp').addEventListener('click', async () => {
+  const pedidos = state.erpPedidosSelecionados || [];
+  if(!pedidos.length){ toast('Nenhum pedido selecionado', 'warn'); return; }
+
+  // Localização/foto — mesma memória (Picking) e Controle de Estoque que o MKT usa.
+  let estoqueInfo = {};
+  if(ESTOQUE_API_URL){
+    $('pdf-erp-status').textContent = 'Consultando localizações no Controle de Estoque...';
+    const todosCodigos = [...new Set(pedidos.flatMap(p => p.rows.flatMap(r => [r.sku, ...(r.codigosAlternativos||[])].filter(Boolean))))];
+    estoqueInfo = await fetchEstoqueLocalizacoes(todosCodigos);
+  }
+  pedidos.forEach(p => p.rows.forEach(r => {
+    const mem = lookupLocationMemory(r.sku, r.codigosAlternativos);
+    if(mem){ r.galpao = mem.galpao || r.galpao; r.localFisicoSugerido = mem.localFisico || ''; }
+    const codes = [r.sku, ...(r.codigosAlternativos||[])];
+    for(const c of codes){
+      const info = estoqueInfo[normalizeCode(c)];
+      if(info && info.encontrado){
+        r.estoqueLocais = info.locais || '';
+        r.foto = info.foto || '';
+        if(!r.descricao && info.descricao) r.descricao = info.descricao;
+        const primeiro = primeiroLocalDoTexto(info.locais);
+        if(primeiro){ r.galpao = primeiro.galpao || r.galpao; r.localFisicoSugerido = primeiro.local || r.localFisicoSugerido; }
+        break;
+      }
+    }
+  }));
+
+  const fFila = pathFila(), fPedidos = pathPedidos();
+  const updates = {};
+
+  // 1) um registro de pedido por PDF selecionado.
+  const pedidoIdPorTemp = {};
+  pedidos.forEach(p => {
+    const ref = db.ref(fPedidos).push();
+    pedidoIdPorTemp[p.tempId] = ref.key;
+    updates[`${fPedidos}/${ref.key}`] = {
+      arquivo: p.fileName,
+      hashArquivo: p.hash,
+      status: 'ativo',
+      identificacao: p.numeroPedido ? `#${p.numeroPedido} — ${p.cliente || 'Cliente não identificado'}` : (p.cliente || 'Sem identificação'),
+      numeroPedido: p.numeroPedido || '',
+      cliente: p.cliente || '',
+      dataPedido: p.data || '',
+      dataPrevista: p.dataPrevista || '',
+      totalItens: p.rows.length,
+      operador: state.operador ? state.operador.nome : '',
+      criadoEm: nowTs(),
+      cronometroStatus: 'parado',
+      cronometroAcumulado: 0,
+      cronometroIniciadoEm: null
+    };
+  });
+
+  // 2) unifica os itens na fila — mesma lógica do MKT (mesmo SKU + galpão
+  // soma quantidade), só que agora percorrendo vários pedidos de uma vez.
+  let unificados = 0;
+  pedidos.forEach(p => {
+    const importId = pedidoIdPorTemp[p.tempId];
+    const identificacao = updates[`${fPedidos}/${importId}`].identificacao;
+
+    p.rows.forEach(r => {
+      const galpao = r.galpao || GALPOES[0];
+      const qtdNova = Number(r.quantidade) || 1;
+      const skuNorm = normalizeCode(r.sku);
+
+      let existenteId = null;
+      const prefixo = fFila + '/';
+      for(const key of Object.keys(updates)){
+        if(!key.startsWith(prefixo)) continue;
+        const cand = updates[key];
+        if(!cand || cand.status !== 'pendente' || (cand.galpao||GALPOES[0]) !== galpao) continue;
+        if(normalizeCode(cand.sku) === skuNorm){ existenteId = key.slice(prefixo.length); break; }
+      }
+      if(!existenteId){
+        const achado = itemsArray().find(i => i.status === 'pendente' && (i.galpao||GALPOES[0]) === galpao && normalizeCode(i.sku) === skuNorm);
+        if(achado) existenteId = achado.id;
+      }
+
+      if(existenteId){
+        unificados++;
+        const atual = updates[`${fFila}/${existenteId}`] || state.fila[existenteId];
+        const qtdAtual = Number(atual.qtdPedida || 0);
+        const pedidosAtuais = Array.isArray(atual.pedidosAgrupados)
+          ? atual.pedidosAgrupados.slice()
+          : [{ importId: atual.importId, identificacao: atual.identificacao || '', quantidade: qtdAtual }];
+        pedidosAtuais.push({ importId, identificacao, quantidade: qtdNova });
+
+        const codigosUnidos = new Set(Array.isArray(atual.codigosAlternativos) ? atual.codigosAlternativos.map(normalizeCode) : []);
+        if(atual.sku) codigosUnidos.add(normalizeCode(atual.sku));
+        (r.codigosAlternativos || []).forEach(c => codigosUnidos.add(normalizeCode(c)));
+        if(skuNorm) codigosUnidos.add(skuNorm);
+        codigosUnidos.delete('');
+
+        updates[`${fFila}/${existenteId}`] = Object.assign({}, atual, {
+          qtdPedida: qtdAtual + qtdNova,
+          pedidosAgrupados: pedidosAtuais,
+          codigosAlternativos: [...codigosUnidos],
+          atualizadoEm: nowTs()
+        });
+      } else {
+        const itemRef = db.ref(fFila).push();
+        updates[`${fFila}/${itemRef.key}`] = {
+          sku: String(r.sku).trim().toUpperCase(),
+          codigosAlternativos: Array.isArray(r.codigosAlternativos) ? r.codigosAlternativos.map(c => String(c).toUpperCase()) : [],
+          descricao: String(r.descricao || '').trim(),
+          qtdPedida: qtdNova,
+          qtdSeparada: 0,
+          identificacao,
+          localizacaoOrigem: String(r.localizacaoOrigem || '').trim(),
+          localFisicoSugerido: String(r.localFisicoSugerido || '').trim(),
+          estoqueLocais: String(r.estoqueLocais || '').trim(),
+          foto: String(r.foto || '').trim(),
+          galpao,
+          status: 'pendente',
+          importId,
+          pedidosAgrupados: [{ importId, identificacao, quantidade: qtdNova }],
+          criadoEm: nowTs(),
+          atualizadoEm: nowTs()
+        };
+      }
+    });
+  });
+
+  await db.ref().update(updates);
+  toast(`${pedidos.length} pedido(s) processado(s)${unificados ? `, ${unificados} item(ns) unificado(s)` : ''}`, 'ok');
+  state.erpPedidosSelecionados = [];
+  $('pdf-erp-preview-wrap').classList.add('hidden');
+  $('pdf-erp-status').textContent = '';
+  switchTab('fila');
+});
 
 /*
  * Calibrado com base no texto REAL extraído via pdf.js do layout Tiny/Olist
@@ -1764,7 +2434,7 @@ $('btn-confirmar-import').addEventListener('click', async () => {
   if(!rows.length){ toast('Nenhum item válido para importar', 'warn'); return; }
   const identificacao = $('pdf-identificacao').value.trim();
 
-  const importRef = db.ref(PATH_IMPORT).push();
+  const importRef = db.ref(pathPedidos()).push();
   const importId = importRef.key;
   await importRef.set({
     arquivo: state.pdfFileName || 'importação PDF',
@@ -1842,7 +2512,7 @@ $('btn-confirmar-import').addEventListener('click', async () => {
         atualizadoEm: nowTs()
       });
     } else {
-      const itemRef = db.ref(PATH_FILA).push();
+      const itemRef = db.ref(pathFila()).push();
       updates[itemRef.key] = {
         sku: String(r.sku).trim().toUpperCase(),
         codigosAlternativos: Array.isArray(r.codigosAlternativos) ? r.codigosAlternativos.map(c => String(c).toUpperCase()) : [],
@@ -1863,7 +2533,7 @@ $('btn-confirmar-import').addEventListener('click', async () => {
       };
     }
   });
-  await db.ref(PATH_FILA).update(updates);
+  await db.ref(pathFila()).update(updates);
 
   toast(`${rows.length} item(ns) processados${unificados ? `, ${unificados} unificado(s) com pedidos já pendentes` : ''}`, 'ok');
   state.pdfRows = [];
@@ -1910,15 +2580,15 @@ async function verificarConclusaoImportacoes(itemAtualizado){
     if(!todosFinalizados) continue;
 
     const agora = nowTs();
-    updates[`${PATH_IMPORT}/${importId}/concluidaEm`] = agora;
+    updates[`${pathPedidos()}/${importId}/concluidaEm`] = agora;
     // Se o cronômetro ainda estava rodando quando o último item terminou,
     // pausa ele automaticamente e soma o trecho final — assim "levou Xh Ymin"
     // reflete só o tempo em que a lista esteve realmente sendo trabalhada.
     if(imp.cronometroStatus === 'rodando' && imp.cronometroIniciadoEm){
       const acumulado = Number(imp.cronometroAcumulado || 0) + Math.max(0, agora - imp.cronometroIniciadoEm);
-      updates[`${PATH_IMPORT}/${importId}/cronometroAcumulado`] = acumulado;
-      updates[`${PATH_IMPORT}/${importId}/cronometroStatus`] = 'parado';
-      updates[`${PATH_IMPORT}/${importId}/cronometroIniciadoEm`] = null;
+      updates[`${pathPedidos()}/${importId}/cronometroAcumulado`] = acumulado;
+      updates[`${pathPedidos()}/${importId}/cronometroStatus`] = 'parado';
+      updates[`${pathPedidos()}/${importId}/cronometroIniciadoEm`] = null;
     }
   }
   if(Object.keys(updates).length) await db.ref().update(updates);
@@ -1960,7 +2630,7 @@ function formatarRelogio(ms){
 function renderImportacoes(){
   const arr = Object.entries(state.importacoes).map(([id,v]) => ({id, ...v})).filter(i => i.status !== 'removido');
   arr.sort((a,b) => (b.criadoEm||0)-(a.criadoEm||0));
-  const box = $('lista-importacoes');
+  const box = $(state.modulo === 'erp' ? 'lista-pedidos-erp' : 'lista-importacoes');
   if(!arr.length){
     box.innerHTML = `<div class="text-center text-slate-500 text-xs border border-dashed border-brand-border rounded-xl p-4">Nenhuma importação ainda.</div>`;
     return;
@@ -2002,7 +2672,7 @@ function renderImportacoes(){
   box.querySelectorAll('.btn-iniciar-cron').forEach(btn => {
     btn.addEventListener('click', async () => {
       const id = btn.closest('[data-import-id]').dataset.importId;
-      await db.ref(`${PATH_IMPORT}/${id}`).update({
+      await db.ref(`${pathPedidos()}/${id}`).update({
         cronometroStatus: 'rodando',
         cronometroIniciadoEm: nowTs()
       });
@@ -2015,7 +2685,7 @@ function renderImportacoes(){
       const imp = state.importacoes[id];
       if(!imp || imp.cronometroStatus !== 'rodando') return;
       const acumulado = Number(imp.cronometroAcumulado || 0) + Math.max(0, nowTs() - (imp.cronometroIniciadoEm || nowTs()));
-      await db.ref(`${PATH_IMPORT}/${id}`).update({
+      await db.ref(`${pathPedidos()}/${id}`).update({
         cronometroStatus: 'parado',
         cronometroAcumulado: acumulado,
         cronometroIniciadoEm: null
@@ -2053,7 +2723,7 @@ function renderImportacoes(){
       if(!confirm(msg)) return;
 
       const updates = {};
-      criadosPorEssaImport.forEach(it => { updates[`${PATH_FILA}/${it.id}`] = null; });
+      criadosPorEssaImport.forEach(it => { updates[`${pathFila()}/${it.id}`] = null; });
 
       comContribuicaoPendente.forEach(it => {
         const pedidosRestantes = it.pedidosAgrupados.filter(p => p.importId !== id);
@@ -2061,17 +2731,17 @@ function renderImportacoes(){
           .filter(p => p.importId === id)
           .reduce((soma, p) => soma + (Number(p.quantidade) || 0), 0);
         if(!pedidosRestantes.length){
-          updates[`${PATH_FILA}/${it.id}`] = null;
+          updates[`${pathFila()}/${it.id}`] = null;
         } else {
-          updates[`${PATH_FILA}/${it.id}/pedidosAgrupados`] = pedidosRestantes;
-          updates[`${PATH_FILA}/${it.id}/qtdPedida`] = Math.max(0, Number(it.qtdPedida || 0) - qtdRemovida);
-          updates[`${PATH_FILA}/${it.id}/atualizadoEm`] = nowTs();
+          updates[`${pathFila()}/${it.id}/pedidosAgrupados`] = pedidosRestantes;
+          updates[`${pathFila()}/${it.id}/qtdPedida`] = Math.max(0, Number(it.qtdPedida || 0) - qtdRemovida);
+          updates[`${pathFila()}/${it.id}/atualizadoEm`] = nowTs();
         }
       });
 
-      updates[`${PATH_IMPORT}/${id}/status`] = 'removido';
-      updates[`${PATH_IMPORT}/${id}/removidoEm`] = nowTs();
-      updates[`${PATH_IMPORT}/${id}/removidoPor`] = state.operador ? state.operador.nome : '';
+      updates[`${pathPedidos()}/${id}/status`] = 'removido';
+      updates[`${pathPedidos()}/${id}/removidoEm`] = nowTs();
+      updates[`${pathPedidos()}/${id}/removidoPor`] = state.operador ? state.operador.nome : '';
       await db.ref().update(updates);
       toast('Importação removida', 'ok');
     });
@@ -2325,6 +2995,7 @@ async function closeCamera(hide){
 function boot(){
   fillGalpaoSelects();
   ensureOperador();
+  atualizarUiModulo();
   initFirebase();
   switchTab('fila');
 
