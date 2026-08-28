@@ -85,16 +85,20 @@
   </div>
 
   <!-- Tabs -->
-  <nav class="max-w-lg mx-auto px-3 pb-2 flex gap-1.5 overflow-x-auto" style="scrollbar-width:none">
-    <button data-tab="fila" class="tab-btn shrink-0 min-h-[38px] px-3 rounded-xl text-[11px] font-black bg-brand-orange text-black">Fila</button>
-    <button data-tab="revisao" class="tab-btn shrink-0 min-h-[38px] px-3 rounded-xl text-[11px] font-black bg-brand-card text-slate-300 border border-brand-border">Revisão <span id="badge-revisao" class="hidden ml-1 bg-brand-yellow text-black rounded-full px-1.5">0</span></button>
-    <button data-tab="importar" class="tab-btn modulo-mkt shrink-0 min-h-[38px] px-3 rounded-xl text-[11px] font-black bg-brand-card text-slate-300 border border-brand-border">Importar</button>
-    <button data-tab="pedidos-erp" class="tab-btn modulo-erp hidden shrink-0 min-h-[38px] px-3 rounded-xl text-[11px] font-black bg-brand-card text-slate-300 border border-brand-border">📋 Pedidos</button>
-    <button data-tab="produtividade" class="tab-btn shrink-0 min-h-[38px] px-3 rounded-xl text-[11px] font-black bg-brand-card text-slate-300 border border-brand-border">📊 Produtividade</button>
-    <button data-tab="separados" class="tab-btn shrink-0 min-h-[38px] px-3 rounded-xl text-[11px] font-black bg-brand-card text-slate-300 border border-brand-border">✅ Separados</button>
-    <button data-tab="sobras" class="tab-btn shrink-0 min-h-[38px] px-3 rounded-xl text-[11px] font-black bg-brand-card text-slate-300 border border-brand-border">📦 Sobras</button>
-    <button data-tab="pausar" class="tab-btn modulo-mkt shrink-0 min-h-[38px] px-3 rounded-xl text-[11px] font-black bg-brand-card text-slate-300 border border-brand-border">🔒 Anúncios</button>
-  </nav>
+  <div class="max-w-lg mx-auto px-3 pb-2 flex items-center gap-1">
+    <button id="btn-tabs-esq" class="shrink-0 w-6 h-8 rounded-lg bg-brand-card border border-brand-border text-slate-400 flex items-center justify-center text-xs">‹</button>
+    <nav id="tabs-nav" class="flex-1 min-w-0 flex gap-1.5 overflow-x-auto scroll-smooth" style="scrollbar-width:none">
+      <button data-tab="fila" class="tab-btn shrink-0 min-h-[38px] px-3 rounded-xl text-[11px] font-black bg-brand-orange text-black">Fila</button>
+      <button data-tab="revisao" class="tab-btn shrink-0 min-h-[38px] px-3 rounded-xl text-[11px] font-black bg-brand-card text-slate-300 border border-brand-border">Revisão <span id="badge-revisao" class="hidden ml-1 bg-brand-yellow text-black rounded-full px-1.5">0</span></button>
+      <button data-tab="importar" class="tab-btn modulo-mkt shrink-0 min-h-[38px] px-3 rounded-xl text-[11px] font-black bg-brand-card text-slate-300 border border-brand-border">Importar</button>
+      <button data-tab="pedidos-erp" class="tab-btn modulo-erp hidden shrink-0 min-h-[38px] px-3 rounded-xl text-[11px] font-black bg-brand-card text-slate-300 border border-brand-border">📋 Pedidos</button>
+      <button data-tab="produtividade" class="tab-btn shrink-0 min-h-[38px] px-3 rounded-xl text-[11px] font-black bg-brand-card text-slate-300 border border-brand-border">📊 Produtividade</button>
+      <button data-tab="separados" class="tab-btn shrink-0 min-h-[38px] px-3 rounded-xl text-[11px] font-black bg-brand-card text-slate-300 border border-brand-border">✅ Separados</button>
+      <button data-tab="sobras" class="tab-btn shrink-0 min-h-[38px] px-3 rounded-xl text-[11px] font-black bg-brand-card text-slate-300 border border-brand-border">📦 Sobras</button>
+      <button data-tab="pausar" class="tab-btn modulo-mkt shrink-0 min-h-[38px] px-3 rounded-xl text-[11px] font-black bg-brand-card text-slate-300 border border-brand-border">🔒 Anúncios</button>
+    </nav>
+    <button id="btn-tabs-dir" class="shrink-0 w-6 h-8 rounded-lg bg-brand-card border border-brand-border text-slate-400 flex items-center justify-center text-xs">›</button>
+  </div>
 </header>
 
 <!-- ===================== MENU LATERAL (trocar módulo) ===================== -->
@@ -777,6 +781,12 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
   btn.addEventListener('click', () => switchTab(btn.dataset.tab));
 });
 
+// Setinhas pra rolar a barra de abas — com "Pedidos"/"Importar" mudando por
+// módulo, nem sempre dá pra ver tudo de uma vez, e nem todo mundo pensa em
+// arrastar o dedo pro lado.
+$('btn-tabs-esq').addEventListener('click', () => $('tabs-nav').scrollBy({ left: -140, behavior: 'smooth' }));
+$('btn-tabs-dir').addEventListener('click', () => $('tabs-nav').scrollBy({ left: 140, behavior: 'smooth' }));
+
 function switchTab(tab){
   document.querySelectorAll('.view-panel').forEach(v => v.classList.add('hidden'));
   $('view-' + tab).classList.remove('hidden');
@@ -796,6 +806,7 @@ function switchTab(tab){
   if(tab === 'produtividade') renderProdutividade();
   if(tab === 'separados') renderSeparados();
   if(tab === 'sobras') renderSobras();
+  if(tab === 'importar' || tab === 'pedidos-erp') renderImportacoes();
 }
 
 /* =========================================================================
@@ -858,6 +869,13 @@ function renderAll(){
   if(!$('view-produtividade').classList.contains('hidden')) renderProdutividade();
   if(!$('view-separados').classList.contains('hidden')) renderSeparados();
   if(!$('view-sobras').classList.contains('hidden')) renderSobras();
+  // A lista de importações/pedidos só era desenhada de dentro do listener
+  // do Firebase — ficava "presa" no que quer que fosse o módulo ativo
+  // naquele exato momento. Trocar de módulo (ou qualquer mudança na fila,
+  // já que os contadores pendente/separado daqui dependem dela) não
+  // atualizava essa lista até o próximo dado novo chegar. Redesenhar aqui
+  // também corrige isso pros dois módulos.
+  if(!$('view-importar').classList.contains('hidden') || !$('view-pedidos-erp').classList.contains('hidden')) renderImportacoes();
 }
 
 function renderKpis(){
@@ -919,28 +937,38 @@ function itemCardHtml(item){
     ? `<button class="btn-buscar-item shrink-0 min-h-[40px] px-3 rounded-xl ${lockMeu ? 'bg-brand-card2 border border-brand-border text-slate-300' : 'bg-purple-500/15 border border-purple-500/40 text-purple-300'} font-black text-xs">${lockMeu ? '🔍 Buscando' : '🔍 Buscar'}</button>`
     : '';
 
+  // Produto fica borrado até o operador clicar "Buscar" — assim ele não
+  // escolhe o que separar bisbilhotando a lista (pegando só o leve/fácil):
+  // decide pela quantidade/galpão/pedido, que continuam visíveis, e só vê
+  // o que É de fato depois de já ter se comprometido a ir atrás.
+  const revelado = lockMeu || item.status === 'separado' || item.status === 'falta_definitiva';
+  const abrirBtn = revelado
+    ? `<button class="btn-abrir-item shrink-0 min-h-[40px] px-3 rounded-xl bg-brand-blue text-black font-black text-xs">Abrir</button>`
+    : '';
+
   return `
   <div class="bg-brand-card border ${item.status==='revisao' ? 'border-brand-yellow/50' : 'border-brand-border'} rounded-xl p-3 space-y-2" data-item-id="${item.id}">
     <div class="flex items-center justify-between gap-2">
-      <div class="flex items-center gap-2 min-w-0">
-        ${foto}
-        <div class="min-w-0">
-          <div class="flex items-center gap-1.5 flex-wrap">
-            <span class="font-black text-sm">${esc(item.sku)}</span>
-            ${statusTag}
-            ${grupo}
-            ${lock}
-            ${buscando}
+      <div class="relative min-w-0 flex-1">
+        <div class="flex items-center gap-2 min-w-0 ${revelado ? '' : 'blur-sm select-none'}">
+          ${foto}
+          <div class="min-w-0">
+            <div class="flex items-center gap-1.5 flex-wrap">
+              <span class="font-black text-sm">${esc(item.sku)}</span>
+              ${statusTag}
+            </div>
+            <div class="text-[11px] text-slate-400 truncate">${esc(item.descricao||'')}</div>
           </div>
-          <div class="text-[11px] text-slate-400 truncate">${esc(item.descricao||'')}</div>
-          <div class="text-[10px] text-slate-500 mt-0.5">${origem}${esc(item.identificacao||'Sem identificação')} · ${esc(item.galpao||'--')} · Qtd ${fmtQty(item.qtdPedida)}</div>
         </div>
+        ${!revelado ? `<div class="absolute inset-0 flex items-center pl-1"><span class="tag-pill bg-black/80 text-slate-300 border border-brand-border whitespace-nowrap">🔒 Toque em Buscar pra revelar</span></div>` : ''}
       </div>
       <div class="flex items-center gap-1.5 shrink-0">
         ${btnBuscar}
-        <button class="btn-abrir-item shrink-0 min-h-[40px] px-3 rounded-xl bg-brand-blue text-black font-black text-xs">Abrir</button>
+        ${abrirBtn}
       </div>
     </div>
+    <div class="flex items-center gap-1.5 flex-wrap">${grupo}${lock}${buscando}</div>
+    <div class="text-[10px] text-slate-500">${origem}${esc(item.identificacao||'Sem identificação')} · ${esc(item.galpao||'--')} · Qtd ${fmtQty(item.qtdPedida)}</div>
     ${pedidosBreakdownHtml(item)}
   </div>`;
 }
@@ -3011,7 +3039,8 @@ function boot(){
   // cada segundo, sem re-renderizar a lista inteira (evita piscar/perder
   // posição de scroll enquanto alguém está de olho no tempo passando).
   setInterval(() => {
-    if($('view-importar').classList.contains('hidden')) return;
+    const visivel = !$('view-importar').classList.contains('hidden') || !$('view-pedidos-erp').classList.contains('hidden');
+    if(!visivel) return;
     document.querySelectorAll('[data-cronometro-import]').forEach(el => {
       const id = el.dataset.cronometroImport;
       const imp = state.importacoes[id];
