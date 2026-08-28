@@ -937,38 +937,28 @@ function itemCardHtml(item){
     ? `<button class="btn-buscar-item shrink-0 min-h-[40px] px-3 rounded-xl ${lockMeu ? 'bg-brand-card2 border border-brand-border text-slate-300' : 'bg-purple-500/15 border border-purple-500/40 text-purple-300'} font-black text-xs">${lockMeu ? '🔍 Buscando' : '🔍 Buscar'}</button>`
     : '';
 
-  // Produto fica borrado até o operador clicar "Buscar" — assim ele não
-  // escolhe o que separar bisbilhotando a lista (pegando só o leve/fácil):
-  // decide pela quantidade/galpão/pedido, que continuam visíveis, e só vê
-  // o que É de fato depois de já ter se comprometido a ir atrás.
-  const revelado = lockMeu || item.status === 'separado' || item.status === 'falta_definitiva';
-  const abrirBtn = revelado
-    ? `<button class="btn-abrir-item shrink-0 min-h-[40px] px-3 rounded-xl bg-brand-blue text-black font-black text-xs">Abrir</button>`
-    : '';
-
   return `
   <div class="bg-brand-card border ${item.status==='revisao' ? 'border-brand-yellow/50' : 'border-brand-border'} rounded-xl p-3 space-y-2" data-item-id="${item.id}">
     <div class="flex items-center justify-between gap-2">
-      <div class="relative min-w-0 flex-1">
-        <div class="flex items-center gap-2 min-w-0 ${revelado ? '' : 'blur-sm select-none'}">
-          ${foto}
-          <div class="min-w-0">
-            <div class="flex items-center gap-1.5 flex-wrap">
-              <span class="font-black text-sm">${esc(item.sku)}</span>
-              ${statusTag}
-            </div>
-            <div class="text-[11px] text-slate-400 truncate">${esc(item.descricao||'')}</div>
+      <div class="flex items-center gap-2 min-w-0">
+        ${foto}
+        <div class="min-w-0">
+          <div class="flex items-center gap-1.5 flex-wrap">
+            <span class="font-black text-sm">${esc(item.sku)}</span>
+            ${statusTag}
+            ${grupo}
+            ${lock}
+            ${buscando}
           </div>
+          <div class="text-[11px] text-slate-400 truncate">${esc(item.descricao||'')}</div>
+          <div class="text-[10px] text-slate-500 mt-0.5">${origem}${esc(item.identificacao||'Sem identificação')} · ${esc(item.galpao||'--')} · Qtd ${fmtQty(item.qtdPedida)}</div>
         </div>
-        ${!revelado ? `<div class="absolute inset-0 flex items-center pl-1"><span class="tag-pill bg-black/80 text-slate-300 border border-brand-border whitespace-nowrap">🔒 Toque em Buscar pra revelar</span></div>` : ''}
       </div>
       <div class="flex items-center gap-1.5 shrink-0">
         ${btnBuscar}
-        ${abrirBtn}
+        <button class="btn-abrir-item shrink-0 min-h-[40px] px-3 rounded-xl bg-brand-blue text-black font-black text-xs">Abrir</button>
       </div>
     </div>
-    <div class="flex items-center gap-1.5 flex-wrap">${grupo}${lock}${buscando}</div>
-    <div class="text-[10px] text-slate-500">${origem}${esc(item.identificacao||'Sem identificação')} · ${esc(item.galpao||'--')} · Qtd ${fmtQty(item.qtdPedida)}</div>
     ${pedidosBreakdownHtml(item)}
   </div>`;
 }
