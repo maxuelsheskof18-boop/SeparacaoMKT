@@ -94,7 +94,7 @@
       <button data-tab="pedidos-erp" class="tab-btn modulo-erp hidden shrink-0 min-h-[38px] px-3 rounded-xl text-[11px] font-black bg-brand-card text-slate-300 border border-brand-border">📋 Pedidos</button>
       <button data-tab="produtividade" class="tab-btn shrink-0 min-h-[38px] px-3 rounded-xl text-[11px] font-black bg-brand-card text-slate-300 border border-brand-border">📊 Produtividade</button>
       <button data-tab="separados" class="tab-btn shrink-0 min-h-[38px] px-3 rounded-xl text-[11px] font-black bg-brand-card text-slate-300 border border-brand-border">✅ Separados</button>
-      <button data-tab="sobras" class="tab-btn shrink-0 min-h-[38px] px-3 rounded-xl text-[11px] font-black bg-brand-card text-slate-300 border border-brand-border">📦 Sobras</button>
+      <button data-tab="sobras" class="tab-btn shrink-0 min-h-[38px] px-3 rounded-xl text-[11px] font-black bg-brand-card text-slate-300 border border-brand-border"><span id="tab-sobras-label">📦 Sobras</span></button>
       <button data-tab="pausar" class="tab-btn modulo-mkt shrink-0 min-h-[38px] px-3 rounded-xl text-[11px] font-black bg-brand-card text-slate-300 border border-brand-border">🔒 Anúncios</button>
     </nav>
     <button id="btn-tabs-dir" class="shrink-0 w-6 h-8 rounded-lg bg-brand-card border border-brand-border text-slate-400 flex items-center justify-center text-xs">›</button>
@@ -286,10 +286,10 @@
     <div id="lista-separados" class="space-y-2"></div>
   </section>
 
-  <!-- ============ VIEW: SOBRAS ============ -->
+  <!-- ============ VIEW: SOBRAS / PENDÊNCIA ============ -->
   <section id="view-sobras" class="view-panel hidden space-y-3">
     <div class="bg-brand-card border border-brand-border rounded-xl p-3">
-      <div class="text-[10px] text-slate-500 font-bold uppercase mb-1">Registrar sobra — bipe o SKU já separado</div>
+      <div id="sobra-label-buscar" class="text-[10px] text-slate-500 font-bold uppercase mb-1">Registrar sobra — bipe o SKU já separado</div>
       <div class="flex gap-2">
         <input id="sobra-sku" placeholder="SKU do produto separado" class="flex-1 bg-black/40 border border-brand-border rounded-xl px-3 py-3 font-black outline-none">
         <button id="btn-buscar-sobra" class="px-4 rounded-xl bg-brand-blue text-black font-black text-xs">Buscar</button>
@@ -298,12 +298,12 @@
     <div id="sobra-busca-resultado"></div>
 
     <div>
-      <div class="font-black text-sm mb-1.5">Sobras registradas</div>
+      <div id="sobra-label-lista" class="font-black text-sm mb-1.5">Sobras registradas</div>
       <div id="lista-sobras" class="space-y-2"></div>
     </div>
   </section>
 
-  <!-- ============ MODAL: REGISTRAR SOBRA ============ -->
+  <!-- ============ MODAL: REGISTRAR SOBRA / PENDÊNCIA ============ -->
   <div id="modal-sobra" class="hidden fixed inset-0 z-[85] bg-black/85 flex items-end sm:items-center justify-center p-2">
     <div class="modal-card w-full max-w-md bg-brand-card border border-brand-border rounded-2xl p-4 space-y-3 max-h-[92vh] overflow-y-auto">
       <div>
@@ -312,15 +312,8 @@
         <div id="sobra-modal-descricao" class="text-xs text-slate-400 mt-0.5">--</div>
       </div>
       <div>
-        <div class="text-[10px] text-slate-500 font-bold uppercase mb-1">Por que não foi embalado?</div>
-        <select id="sobra-motivo" class="w-full bg-black/40 border border-brand-border rounded-xl px-3 py-3 font-bold outline-none">
-          <option value="Pedido cancelado">Pedido cancelado</option>
-          <option value="Item errado separado">Item errado separado</option>
-          <option value="Avariado / danificado">Avariado / danificado</option>
-          <option value="Pedido alterado pelo cliente">Pedido alterado pelo cliente</option>
-          <option value="Separou a mais (excedente)">Separou a mais (excedente)</option>
-          <option value="Outro">Outro</option>
-        </select>
+        <div id="sobra-label-motivo" class="text-[10px] text-slate-500 font-bold uppercase mb-1">Por que não foi embalado?</div>
+        <select id="sobra-motivo" class="w-full bg-black/40 border border-brand-border rounded-xl px-3 py-3 font-bold outline-none"></select>
       </div>
       <div>
         <div class="text-[10px] text-slate-500 font-bold uppercase mb-1">Observação (opcional)</div>
@@ -834,6 +827,7 @@ function atualizarUiModulo(){
     (modulo === 'mkt' ? 'border-brand-orange bg-brand-orange/10' : 'border-brand-border bg-brand-card');
   $('btn-modulo-erp').className = 'btn-modulo w-full text-left rounded-xl border p-3 flex items-center gap-3 ' +
     (modulo === 'erp' ? 'border-sky-500 bg-sky-500/10' : 'border-brand-border bg-brand-card');
+  atualizarUiSobras();
 }
 
 function switchModulo(modulo){
@@ -964,8 +958,10 @@ function itemCardHtml(item){
 }
 
 function renderFila(){
-  const arr = itemsArray().filter(i => (i.status === 'pendente' || i.status === 'revisao') && passaGalpao(i));
-  arr.sort((a,b) => (a.status==='revisao'?0:1) - (b.status==='revisao'?0:1) || (a.criadoEm||0)-(b.criadoEm||0));
+  // Item em revisão sai da Fila — fica só na aba Revisão, pra não misturar
+  // com o que ainda nem foi tentado.
+  const arr = itemsArray().filter(i => i.status === 'pendente' && passaGalpao(i));
+  arr.sort((a,b) => (a.criadoEm||0)-(b.criadoEm||0));
   const box = $('lista-fila');
   if(!arr.length){
     box.innerHTML = `<div class="text-center text-slate-500 text-xs border border-dashed border-brand-border rounded-xl p-6">Nenhum item pendente. Importe um PDF de separação.</div>`;
@@ -1486,7 +1482,8 @@ function buscarParaSobra(){
   ).sort((a,b) => (b.dataHoraSeparado||0) - (a.dataHoraSeparado||0));
 
   if(!matches.length){
-    box.innerHTML = `<div class="text-center text-slate-500 text-xs border border-dashed border-brand-border rounded-xl p-4">Nenhum item separado (e ainda sem sobra registrada) com esse SKU.</div>`;
+    const rotulo = state.modulo === 'erp' ? 'pendência' : 'sobra';
+    box.innerHTML = `<div class="text-center text-slate-500 text-xs border border-dashed border-brand-border rounded-xl p-4">Nenhum item separado (e ainda sem ${rotulo} registrada) com esse SKU.</div>`;
     return;
   }
 
@@ -1502,12 +1499,37 @@ function buscarParaSobra(){
   });
 }
 
+// MKT trata isso como "sobra" (separou mas não embalou/enviou); ERP não
+// tem esse conceito — lá é "pendência" do pedido (não chegou completo,
+// esqueceram um item, etc.). Mesmo mecanismo por baixo (bipa o SKU já
+// separado, registra motivo + observação), só o texto e os motivos mudam.
+const SOBRA_MOTIVOS = {
+  mkt: ['Pedido cancelado', 'Item errado separado', 'Avariado / danificado', 'Pedido alterado pelo cliente', 'Separou a mais (excedente)', 'Outro'],
+  erp: ['Não entregue completo', 'Item esquecido na separação', 'Cliente não recebeu / reclamação', 'Pedido alterado depois da separação', 'Avariado / danificado', 'Outro']
+};
+
+function preencherMotivosSobra(){
+  const opts = SOBRA_MOTIVOS[state.modulo] || SOBRA_MOTIVOS.mkt;
+  $('sobra-motivo').innerHTML = opts.map(o => `<option value="${esc(o)}">${esc(o)}</option>`).join('');
+}
+
+function atualizarUiSobras(){
+  const erp = state.modulo === 'erp';
+  $('tab-sobras-label').textContent = erp ? '🚩 Pendência' : '📦 Sobras';
+  $('sobra-label-buscar').textContent = erp ? 'Registrar pendência — bipe o SKU do pedido' : 'Registrar sobra — bipe o SKU já separado';
+  $('sobra-sku').placeholder = erp ? 'SKU do item do pedido' : 'SKU do produto separado';
+  $('sobra-label-lista').textContent = erp ? 'Pendências registradas' : 'Sobras registradas';
+  $('sobra-label-motivo').textContent = erp ? 'Qual o problema com esse item?' : 'Por que não foi embalado?';
+  $('btn-confirmar-sobra').textContent = erp ? '✔ Registrar pendência' : '✔ Registrar sobra';
+  preencherMotivosSobra();
+}
+
 function abrirModalSobra(item){
   if(!item) return;
   state.itemSobraAtual = item;
   $('sobra-modal-sku').textContent = item.sku;
   $('sobra-modal-descricao').textContent = item.descricao || '';
-  $('sobra-motivo').value = 'Pedido cancelado';
+  preencherMotivosSobra();
   $('sobra-obs').value = '';
   $('modal-sobra').classList.remove('hidden');
 }
@@ -1539,7 +1561,7 @@ $('btn-confirmar-sobra').addEventListener('click', async () => {
     if(!result.committed){
       toast('Esse item já mudou de estado — atualize a busca.', 'warn');
     } else {
-      toast(`Sobra registrada para ${item.sku}`, 'ok');
+      toast(`${state.modulo === 'erp' ? 'Pendência' : 'Sobra'} registrada para ${item.sku}`, 'ok');
     }
   } catch(e){
     toast('Erro ao salvar: ' + (e.message||e), 'error');
@@ -1554,7 +1576,8 @@ function renderSobras(){
   const arr = itemsArray().filter(i => i.sobra).sort((a,b) => (b.sobraTs||0) - (a.sobraTs||0));
   const box = $('lista-sobras');
   if(!arr.length){
-    box.innerHTML = `<div class="text-center text-slate-500 text-xs border border-dashed border-brand-border rounded-xl p-6">Nenhuma sobra registrada.</div>`;
+    const rotulo = state.modulo === 'erp' ? 'pendência registrada' : 'sobra registrada';
+    box.innerHTML = `<div class="text-center text-slate-500 text-xs border border-dashed border-brand-border rounded-xl p-6">Nenhuma ${rotulo}.</div>`;
     return;
   }
   box.innerHTML = arr.map(i => `
