@@ -385,6 +385,7 @@
 </div>
 <input id="input-foto-camera" type="file" accept="image/*" capture="environment" class="hidden">
 <input id="input-foto-pedido" type="file" accept="image/*" capture="environment" class="hidden">
+<input id="input-video-pedido" type="file" accept="video/*" capture="environment" class="hidden">
 
 <!-- ===================== MODAL: CONFIRMAR SEPARAÇÃO ===================== -->
 <div id="modal-confirmar" class="hidden fixed inset-0 z-[85] bg-black/85 flex items-end sm:items-center justify-center p-2">
@@ -1499,29 +1500,56 @@ const STATUS_PEDIDO_ICONE = {
   andamento: ''
 };
 
-const STATUS_PEDIDO_TEXTO = {
-  completo: '✅ Separação completa',
-  falta: '❌ Finalizado com falta de item(ns)',
-  andamento: '⏳ Em andamento'
+// Emoji "raros" (📦, ⏳...) apareceram como � no WhatsApp de alguns
+// aparelhos — nem todo telefone tem a fonte pra eles. Texto do WhatsApp fica
+// só com palavras simples; os emoji na tela do app continuam normalmente
+// (aparecem certo lá, só o texto exportado é que precisa ser mais universal).
+const STATUS_PEDIDO_TEXTO_WHATS = {
+  completo: 'COMPLETO',
+  falta: 'FALTANDO ITEM(NS)',
+  andamento: 'EM ANDAMENTO'
 };
 
-// Texto pronto pra mandar por WhatsApp — resumo curto (status + itens +
-// link das fotos, se já tiver) do jeito que alguém de fora consegue
-// entender sem precisar abrir o app.
+// Texto pronto pra mandar por WhatsApp — resumo curto do jeito que alguém
+// de fora consegue entender sem abrir o app. Só lista os itens quando FALTA
+// alguma coisa (pra saber exatamente o que procurar) — se está tudo
+// separado, o resumo já basta, não precisa repetir a lista inteira.
 function gerarRelatorioPedidoTexto(grupo, pedidoObj){
-  const status = STATUS_PEDIDO_TEXTO[statusPedidoGrupo(pedidoObj)];
+  const status = statusPedidoGrupo(pedidoObj);
   const totalEsperado = (pedidoObj && pedidoObj.totalItens) || grupo.itens.length;
   const linhas = [
-    `📦 Pedido ${grupo.identificacao}`,
-    `${status} — ${grupo.itens.length}/${totalEsperado} item(ns) separado(s)`,
-    ''
+    `Pedido ${grupo.identificacao}`,
+    `Status: ${STATUS_PEDIDO_TEXTO_WHATS[status]} (${grupo.itens.length}/${totalEsperado} separado(s))`
   ];
-  grupo.itens.forEach(({item, qtd}) => linhas.push(`• ${item.sku} — ${item.descricao||''} (Qtd ${fmtQty(qtd)})`));
+
+  if(status !== 'completo' && pedidoObj){
+    const relacionados = itemsArray().filter(i =>
+      i.importId === pedidoObj.id ||
+      (Array.isArray(i.pedidosAgrupados) && i.pedidosAgrupados.some(p => p.importId === pedidoObj.id))
+    );
+    const faltando = relacionados.filter(i => i.status !== 'separado');
+    if(faltando.length){
+      linhas.push('');
+      linhas.push('Faltando:');
+      faltando.forEach(i => linhas.push(`- ${i.sku} - ${i.descricao||''} (${i.status === 'falta_definitiva' ? 'nao encontrado' : 'ainda pendente'})`));
+    }
+  }
+
   if(pedidoObj && pedidoObj.fotoPastaUrl){
+    const midias = midiasDoPedido(pedidoObj);
     linhas.push('');
-    linhas.push(`📷 Fotos: ${pedidoObj.fotoPastaUrl}`);
+    linhas.push(`Fotos/videos (${midias.length}): ${pedidoObj.fotoPastaUrl}`);
   }
   return linhas.join('\n');
+}
+
+const MIDIAS_MINIMO = 3;
+
+// midias é salvo como objeto (chave = id gerado no push), não array — evita
+// duas pessoas sobrescreverem a mídia uma da outra se tirarem foto quase ao
+// mesmo tempo. Isso só converte pra lista, pra facilitar de usar na tela.
+function midiasDoPedido(pedidoObj){
+  return pedidoObj && pedidoObj.midias ? Object.values(pedidoObj.midias) : [];
 }
 
 function pedidoGrupoHtml(grupo){
@@ -1530,19 +1558,22 @@ function pedidoGrupoHtml(grupo){
 
   const pedidoObj = state.modulo === 'erp' ? pedidoObjDoGrupo(grupo.identificacao) : null;
   const statusIcone = pedidoObj ? STATUS_PEDIDO_ICONE[statusPedidoGrupo(pedidoObj)] : '';
-  const podeFotografar = !!(PICKING_RELATORIOS_API_URL && pedidoObj && pedidoObj.concluidaEm);
+  const podeAnexarMidia = !!(PICKING_RELATORIOS_API_URL && pedidoObj && pedidoObj.concluidaEm);
+  const midias = pedidoObj ? midiasDoPedido(pedidoObj) : [];
+  const atingiuMinimo = midias.length >= MIDIAS_MINIMO;
 
   let acoesArea = '';
   if(pedidoObj && pedidoObj.fotoPastaUrl){
-    acoesArea += `<a href="${esc(pedidoObj.fotoPastaUrl)}" target="_blank" rel="noopener" class="shrink-0 text-[10px] font-black text-sky-300 bg-sky-500/10 border border-sky-500/40 rounded-lg px-2.5 py-2" title="Abrir pasta de fotos no Drive">📁</a>`;
+    acoesArea += `<a href="${esc(pedidoObj.fotoPastaUrl)}" target="_blank" rel="noopener" class="shrink-0 text-[10px] font-black ${atingiuMinimo ? 'text-emerald-300 bg-emerald-500/10 border-emerald-500/40' : 'text-orange-300 bg-orange-500/10 border-orange-500/40'} border rounded-lg px-2.5 py-2" title="Abrir pasta de fotos/vídeos no Drive">📁 ${midias.length}/${MIDIAS_MINIMO}</a>`;
   }
-  if(podeFotografar){
+  if(podeAnexarMidia){
     acoesArea += `<button class="btn-foto-pedido shrink-0 text-[10px] font-black text-sky-300 bg-sky-500/10 border border-sky-500/40 rounded-lg px-2.5 py-2" data-pedido-id="${esc(pedidoObj.id)}" data-numero="${esc(pedidoObj.numeroPedido||'')}" data-cliente="${esc(pedidoObj.cliente||'')}" title="Tirar foto do pedido">📷</button>`;
+    acoesArea += `<button class="btn-video-pedido shrink-0 text-[10px] font-black text-sky-300 bg-sky-500/10 border border-sky-500/40 rounded-lg px-2.5 py-2" data-pedido-id="${esc(pedidoObj.id)}" data-numero="${esc(pedidoObj.numeroPedido||'')}" data-cliente="${esc(pedidoObj.cliente||'')}" title="Gravar vídeo curto do pedido">🎥</button>`;
   }
-  // Manda por WhatsApp só depois que a foto já foi tirada (é o "comprovante"
-  // que acompanha o relatório) — abre com a mensagem pronta, escolhendo pra
-  // quem mandar (não precisa configurar número nenhum).
-  if(pedidoObj && pedidoObj.fotoUrl){
+  // Manda por WhatsApp só depois de bater o mínimo de mídias — é o
+  // "comprovante" que acompanha o relatório. Abre com a mensagem pronta,
+  // escolhendo pra quem mandar (não precisa configurar número nenhum).
+  if(atingiuMinimo){
     const linkWhats = 'https://wa.me/?text=' + encodeURIComponent(gerarRelatorioPedidoTexto(grupo, pedidoObj));
     acoesArea += `<a href="${esc(linkWhats)}" target="_blank" rel="noopener" class="shrink-0 text-[10px] font-black text-emerald-300 bg-emerald-500/10 border border-emerald-500/40 rounded-lg px-2.5 py-2" title="Enviar relatório por WhatsApp">📲</a>`;
   }
@@ -1623,6 +1654,12 @@ function renderSeparados(){
         $('input-foto-pedido').click();
       });
     });
+    box.querySelectorAll('.btn-video-pedido').forEach(btn => {
+      btn.addEventListener('click', () => {
+        state.pedidoFotoAtual = { pedidoId: btn.dataset.pedidoId, numeroPedido: btn.dataset.numero, cliente: btn.dataset.cliente };
+        $('input-video-pedido').click();
+      });
+    });
   }
 }
 
@@ -1665,18 +1702,43 @@ function comprimirImagem(file, maxLado, qualidade){
   });
 }
 
-$('input-foto-pedido').addEventListener('change', async e => {
-  const file = e.target.files[0];
-  e.target.value = '';
+// Vídeo não passa por compressão (não dá pra fazer isso direito só com
+// canvas) — em vez disso, limita o tamanho do arquivo. "Pequeno" é o que
+// pedido: um clipe curto de celular cabe bem dentro disso.
+const VIDEO_TAMANHO_MAX_MB = 8;
+
+function lerArquivoComoBase64(file){
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).split(',')[1] || '');
+    reader.onerror = () => reject(new Error('Não consegui ler o arquivo'));
+    reader.readAsDataURL(file);
+  });
+}
+
+// Compartilhado entre foto e vídeo do pedido — cada envio ACRESCENTA uma
+// mídia nova (não substitui as anteriores), então dá pra juntar várias até
+// bater o mínimo.
+async function enviarMidiaPedido(file, tipo){
   const alvo = state.pedidoFotoAtual;
   state.pedidoFotoAtual = null;
   if(!file || !alvo) return;
-  if(!PICKING_RELATORIOS_API_URL){ toast('Foto do pedido ainda não configurada (falta a URL do Apps Script)', 'warn'); return; }
+  if(!PICKING_RELATORIOS_API_URL){ toast('Foto/vídeo do pedido ainda não configurado (falta a URL do Apps Script)', 'warn'); return; }
+  if(tipo === 'video' && file.size > VIDEO_TAMANHO_MAX_MB * 1024 * 1024){
+    toast(`Vídeo muito grande (${(file.size/1024/1024).toFixed(1)}MB) — grave um vídeo mais curto (até ${VIDEO_TAMANHO_MAX_MB}MB)`, 'warn');
+    return;
+  }
 
-  toast('Enviando foto...', 'info');
+  toast(`Enviando ${tipo === 'video' ? 'vídeo' : 'foto'}...`, 'info');
   let tempRef = null;
   try {
-    const { base64, mimeType } = await comprimirImagem(file, 1280, 0.72);
+    let base64, mimeType;
+    if(tipo === 'video'){
+      base64 = await lerArquivoComoBase64(file);
+      mimeType = file.type || 'video/mp4';
+    } else {
+      ({ base64, mimeType } = await comprimirImagem(file, 1280, 0.72));
+    }
 
     tempRef = db.ref(`${ROOT_ERP}/fotosTemp`).push();
     await tempRef.set({ base64, mimeType, criadoEm: nowTs() });
@@ -1687,23 +1749,41 @@ $('input-foto-pedido').addEventListener('change', async e => {
     const data = await resp.json();
 
     if(!data.ok){
-      toast('Erro ao salvar a foto: ' + (data.error||'desconhecido'), 'error');
+      toast('Erro ao salvar: ' + (data.error||'desconhecido'), 'error');
       return;
     }
 
-    await db.ref(`${pathPedidos()}/${alvo.pedidoId}`).update({
-      fotoUrl: data.url,
-      fotoViewUrl: data.viewUrl || data.url,
-      fotoPastaUrl: data.pastaUrl || ''
+    // Cada mídia entra com sua PRÓPRIA chave (não sobrescreve as outras) —
+    // é assim que dá pra juntar várias fotos/vídeos do mesmo pedido.
+    const midiaRef = db.ref(`${pathPedidos()}/${alvo.pedidoId}/midias`).push();
+    await midiaRef.set({
+      url: data.url,
+      viewUrl: data.viewUrl || data.url,
+      tipo: data.tipo || tipo,
+      criadoEm: nowTs(),
+      operador: state.operador ? state.operador.nome : ''
     });
-    toast('📷 Foto do pedido salva!', 'ok');
+    await db.ref(`${pathPedidos()}/${alvo.pedidoId}`).update({ fotoPastaUrl: data.pastaUrl || '' });
+
+    toast(`${tipo === 'video' ? '🎥 Vídeo' : '📷 Foto'} do pedido salvo!`, 'ok');
   } catch(err){
-    toast('Erro ao enviar a foto: ' + (err.message||err), 'error');
+    toast('Erro ao enviar: ' + (err.message||err), 'error');
   } finally {
     // Se algo deu errado depois de já ter escrito o temporário, não deixa
     // lixo acumulando no Firebase.
     if(tempRef) tempRef.remove().catch(()=>{});
   }
+}
+
+$('input-foto-pedido').addEventListener('change', e => {
+  const file = e.target.files[0];
+  e.target.value = '';
+  if(file) enviarMidiaPedido(file, 'foto');
+});
+$('input-video-pedido').addEventListener('change', e => {
+  const file = e.target.files[0];
+  e.target.value = '';
+  if(file) enviarMidiaPedido(file, 'video');
 });
 
 /* =========================================================================
