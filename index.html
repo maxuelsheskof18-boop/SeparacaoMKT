@@ -1465,9 +1465,63 @@ state.separadosExpandidos = new Set(); // quais pedidos estão abertos (sobreviv
 
 // Acha o registro do pedido (na aba Pedidos/Importações) cuja identificação
 // bate com a do grupo — é de lá que vem "concluidaEm" (todo item já
-// terminado) e a fotoUrl já salva, se existir.
+// terminado) e a fotoUrl já salva, se existir. O MESMO pedido pode ter sido
+// importado mais de uma vez (reimportação por engano, teste, etc.) e gerar
+// vários registros com a mesma identificação — nesse caso prioriza o que já
+// está concluído (é o que realmente representa o estado atual), e só na
+// falta de um concluído usa o mais recente.
 function pedidoObjDoGrupo(identificacao){
-  return Object.entries(state.importacoes).map(([id,v]) => ({id, ...v})).find(p => p.identificacao === identificacao);
+  const candidatos = Object.entries(state.importacoes)
+    .map(([id,v]) => ({id, ...v}))
+    .filter(p => p.identificacao === identificacao);
+  if(!candidatos.length) return undefined;
+  const concluido = candidatos.find(p => p.concluidaEm);
+  if(concluido) return concluido;
+  return candidatos.sort((a,b) => (b.criadoEm||0) - (a.criadoEm||0))[0];
+}
+
+// 'andamento' = ainda tem item pendente/revisão desse pedido em outro lugar
+// (não dá pra saber se vai fechar redondo ainda); 'completo' = todo mundo
+// terminou em 'separado'; 'falta' = terminou, mas algum item ficou em falta
+// definitiva — o pedido foi resolvido, só que não com sucesso.
+function statusPedidoGrupo(pedidoObj){
+  if(!pedidoObj || !pedidoObj.concluidaEm) return 'andamento';
+  const relacionados = itemsArray().filter(i =>
+    i.importId === pedidoObj.id ||
+    (Array.isArray(i.pedidosAgrupados) && i.pedidosAgrupados.some(p => p.importId === pedidoObj.id))
+  );
+  return relacionados.some(i => i.status === 'falta_definitiva') ? 'falta' : 'completo';
+}
+
+const STATUS_PEDIDO_ICONE = {
+  completo: '<span title="Separação completa">✅</span>',
+  falta: '<span title="Falta item(ns) desse pedido">❌</span>',
+  andamento: ''
+};
+
+const STATUS_PEDIDO_TEXTO = {
+  completo: '✅ Separação completa',
+  falta: '❌ Finalizado com falta de item(ns)',
+  andamento: '⏳ Em andamento'
+};
+
+// Texto pronto pra mandar por WhatsApp — resumo curto (status + itens +
+// link das fotos, se já tiver) do jeito que alguém de fora consegue
+// entender sem precisar abrir o app.
+function gerarRelatorioPedidoTexto(grupo, pedidoObj){
+  const status = STATUS_PEDIDO_TEXTO[statusPedidoGrupo(pedidoObj)];
+  const totalEsperado = (pedidoObj && pedidoObj.totalItens) || grupo.itens.length;
+  const linhas = [
+    `📦 Pedido ${grupo.identificacao}`,
+    `${status} — ${grupo.itens.length}/${totalEsperado} item(ns) separado(s)`,
+    ''
+  ];
+  grupo.itens.forEach(({item, qtd}) => linhas.push(`• ${item.sku} — ${item.descricao||''} (Qtd ${fmtQty(qtd)})`));
+  if(pedidoObj && pedidoObj.fotoPastaUrl){
+    linhas.push('');
+    linhas.push(`📷 Fotos: ${pedidoObj.fotoPastaUrl}`);
+  }
+  return linhas.join('\n');
 }
 
 function pedidoGrupoHtml(grupo){
@@ -1475,16 +1529,22 @@ function pedidoGrupoHtml(grupo){
   const ultima = grupo.ultimaSeparacao ? new Date(grupo.ultimaSeparacao).toLocaleString('pt-BR') : '--';
 
   const pedidoObj = state.modulo === 'erp' ? pedidoObjDoGrupo(grupo.identificacao) : null;
-  const concluido = pedidoObj && pedidoObj.concluidaEm;
-  const podeFotografar = !!(PICKING_RELATORIOS_API_URL && concluido);
+  const statusIcone = pedidoObj ? STATUS_PEDIDO_ICONE[statusPedidoGrupo(pedidoObj)] : '';
+  const podeFotografar = !!(PICKING_RELATORIOS_API_URL && pedidoObj && pedidoObj.concluidaEm);
 
-  let fotoArea = '';
+  let acoesArea = '';
+  if(pedidoObj && pedidoObj.fotoPastaUrl){
+    acoesArea += `<a href="${esc(pedidoObj.fotoPastaUrl)}" target="_blank" rel="noopener" class="shrink-0 text-[10px] font-black text-sky-300 bg-sky-500/10 border border-sky-500/40 rounded-lg px-2.5 py-2" title="Abrir pasta de fotos no Drive">📁</a>`;
+  }
+  if(podeFotografar){
+    acoesArea += `<button class="btn-foto-pedido shrink-0 text-[10px] font-black text-sky-300 bg-sky-500/10 border border-sky-500/40 rounded-lg px-2.5 py-2" data-pedido-id="${esc(pedidoObj.id)}" data-numero="${esc(pedidoObj.numeroPedido||'')}" data-cliente="${esc(pedidoObj.cliente||'')}" title="Tirar foto do pedido">📷</button>`;
+  }
+  // Manda por WhatsApp só depois que a foto já foi tirada (é o "comprovante"
+  // que acompanha o relatório) — abre com a mensagem pronta, escolhendo pra
+  // quem mandar (não precisa configurar número nenhum).
   if(pedidoObj && pedidoObj.fotoUrl){
-    fotoArea = `<a href="${esc(pedidoObj.fotoUrl)}" target="_blank" rel="noopener" class="shrink-0">
-      <img src="${esc(pedidoObj.fotoUrl)}" class="w-10 h-10 rounded-lg object-cover border border-brand-border" alt="Foto do pedido">
-    </a>`;
-  } else if(podeFotografar){
-    fotoArea = `<button class="btn-foto-pedido shrink-0 text-[10px] font-black text-sky-300 bg-sky-500/10 border border-sky-500/40 rounded-lg px-2.5 py-2" data-pedido-id="${esc(pedidoObj.id)}" data-numero="${esc(pedidoObj.numeroPedido||'')}" data-cliente="${esc(pedidoObj.cliente||'')}">📷 Foto</button>`;
+    const linkWhats = 'https://wa.me/?text=' + encodeURIComponent(gerarRelatorioPedidoTexto(grupo, pedidoObj));
+    acoesArea += `<a href="${esc(linkWhats)}" target="_blank" rel="noopener" class="shrink-0 text-[10px] font-black text-emerald-300 bg-emerald-500/10 border border-emerald-500/40 rounded-lg px-2.5 py-2" title="Enviar relatório por WhatsApp">📲</a>`;
   }
 
   return `
@@ -1492,12 +1552,12 @@ function pedidoGrupoHtml(grupo){
     <div class="flex items-center gap-2 p-3">
       <button class="btn-toggle-pedido-grupo flex-1 text-left flex items-center justify-between gap-2 min-w-0">
         <div class="min-w-0">
-          <div class="font-black text-sm truncate">${esc(grupo.identificacao)}</div>
+          <div class="font-black text-sm truncate flex items-center gap-1.5">${statusIcone}<span class="truncate">${esc(grupo.identificacao)}</span></div>
           <div class="text-[10px] text-slate-500 mt-0.5">${grupo.itens.length} item(ns) · último em ${ultima}</div>
         </div>
         <span class="shrink-0 text-slate-400 text-xs transition-transform ${expandido ? 'rotate-180' : ''}">▾</span>
       </button>
-      ${fotoArea}
+      ${acoesArea}
     </div>
     <div class="grupo-itens ${expandido ? '' : 'hidden'} px-3 pb-3 space-y-1.5">
       ${grupo.itens.map(({item, qtd}) => separadoItemMiniHtml(item, qtd)).join('')}
@@ -1631,7 +1691,11 @@ $('input-foto-pedido').addEventListener('change', async e => {
       return;
     }
 
-    await db.ref(`${pathPedidos()}/${alvo.pedidoId}`).update({ fotoUrl: data.url, fotoViewUrl: data.viewUrl || data.url });
+    await db.ref(`${pathPedidos()}/${alvo.pedidoId}`).update({
+      fotoUrl: data.url,
+      fotoViewUrl: data.viewUrl || data.url,
+      fotoPastaUrl: data.pastaUrl || ''
+    });
     toast('📷 Foto do pedido salva!', 'ok');
   } catch(err){
     toast('Erro ao enviar a foto: ' + (err.message||err), 'error');
