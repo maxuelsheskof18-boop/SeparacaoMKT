@@ -493,6 +493,38 @@ function pathPausar(){ return PATHS[state.modulo].pausar; }
 
 const GALPOES = ['Leopoldo', '21 de Abril', 'Cesário'];
 
+// Ordem de separação dos pedidos do ERP: emergencial vem antes de retirada,
+// que vem antes de entrega — dentro do mesmo tipo, o que tem a data prevista
+// mais próxima vem primeiro. Número menor = prioridade maior (ordena antes).
+const TIPO_PEDIDO_PRIORIDADE = { emergencial: 0, retirada: 1, entrega: 2 };
+const TIPO_PEDIDO_INFO = {
+  emergencial: { label: 'Emergencial', icone: '🚨', classe: 'text-red-300 bg-red-500/10 border-red-500/40' },
+  retirada: { label: 'Retirada', icone: '🏃', classe: 'text-orange-300 bg-orange-500/10 border-orange-500/40' },
+  entrega: { label: 'Entrega', icone: '🚚', classe: 'text-sky-300 bg-sky-500/10 border-sky-500/40' }
+};
+const TIPO_PEDIDO_ORDEM = ['emergencial', 'retirada', 'entrega']; // ordem de ciclo do botão
+
+// "DD/MM/AAAA" (como vem do PDF) -> timestamp, pra dar pra comparar/ordenar.
+// Datas vazias ou mal formadas viram +Infinity (vão pro fim da fila, não
+// pro início por engano).
+function parseDataBr(str){
+  if(!str) return Infinity;
+  const m = String(str).trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if(!m) return Infinity;
+  const d = new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1]));
+  return isNaN(d.getTime()) ? Infinity : d.getTime();
+}
+
+// Compara dois pedidos pela ordem de separação: tipo primeiro, depois quem
+// entrega mais cedo. Usado tanto na lista de Pedidos quanto pra ordenar a
+// Fila.
+function compararPrioridadePedido(a, b){
+  const prioA = TIPO_PEDIDO_PRIORIDADE[a && a.tipoPedido] ?? TIPO_PEDIDO_PRIORIDADE.entrega;
+  const prioB = TIPO_PEDIDO_PRIORIDADE[b && b.tipoPedido] ?? TIPO_PEDIDO_PRIORIDADE.entrega;
+  if(prioA !== prioB) return prioA - prioB;
+  return parseDataBr(a && a.dataPrevista) - parseDataBr(b && b.dataPrevista);
+}
+
 // PIN client-side apenas para reduzir acesso casual à aba "Pausar Anúncios".
 // Isso NÃO é segurança de verdade — para produção, restrinja por Firebase Auth + regras server-side.
 const SUPERVISOR_PIN = 'Vesco@2026';
@@ -930,6 +962,17 @@ function itemCardHtml(item){
   const lock = lockOutro ? `<span class="tag-pill bg-purple-500/15 text-purple-300 border border-purple-500/30">🔒 ${esc(item.emSeparacaoPor)}</span>` : '';
   const buscando = lockMeu ? `<span class="tag-pill bg-purple-500/15 text-purple-300 border border-purple-500/30">🔍 Você está buscando</span>` : '';
 
+  // Mostra por que esse item está nessa posição na fila — o tipo do pedido
+  // mais urgente que ele atende (emergencial/retirada/entrega).
+  let prioridadeTag = '';
+  if(state.modulo === 'erp'){
+    const melhorPedido = melhorPedidoDoItem(item);
+    if(melhorPedido){
+      const tipo = TIPO_PEDIDO_INFO[melhorPedido.tipoPedido] || TIPO_PEDIDO_INFO.entrega;
+      prioridadeTag = `<span class="tag-pill ${tipo.classe} border" title="Entrega prevista: ${esc(melhorPedido.dataPrevista||'--')}">${tipo.icone} ${tipo.label}</span>`;
+    }
+  }
+
   // "Buscar" declara pra todo mundo que ALGUÉM já foi atrás desse item (o
   // outro operador não perde tempo buscando de novo) e liga um cronômetro
   // silencioso (não aparece na tela, só é usado depois nos relatórios) que
@@ -948,6 +991,7 @@ function itemCardHtml(item){
           <div class="flex items-center gap-1.5 flex-wrap">
             <span class="font-black text-sm">${esc(item.sku)}</span>
             ${statusTag}
+            ${prioridadeTag}
             ${grupo}
             ${lock}
             ${buscando}
@@ -965,11 +1009,36 @@ function itemCardHtml(item){
   </div>`;
 }
 
+// Entre todos os pedidos que esse item atende (pode ser mais de um, se foi
+// unificado), acha o de prioridade MAIS ALTA — é ele que decide a posição
+// do item na fila (um item que atende um pedido emergencial vai pro topo,
+// mesmo que também atenda outro de entrega normal).
+function melhorPedidoDoItem(item){
+  const importIds = new Set();
+  if(item.importId) importIds.add(item.importId);
+  if(Array.isArray(item.pedidosAgrupados)) item.pedidosAgrupados.forEach(p => { if(p.importId) importIds.add(p.importId); });
+  let melhor = null;
+  importIds.forEach(id => {
+    const pedido = state.importacoes[id];
+    if(!pedido) return;
+    if(!melhor || compararPrioridadePedido(pedido, melhor) < 0) melhor = pedido;
+  });
+  return melhor;
+}
+
 function renderFila(){
   // Item em revisão sai da Fila — fica só na aba Revisão, pra não misturar
   // com o que ainda nem foi tentado.
   const arr = itemsArray().filter(i => i.status === 'pendente' && passaGalpao(i));
-  arr.sort((a,b) => (a.criadoEm||0)-(b.criadoEm||0));
+  // No ERP, respeita a ordem de separação (emergencial > retirada > entrega,
+  // depois quem entrega mais cedo). No MKT continua só por ordem de chegada.
+  arr.sort((a,b) => {
+    if(state.modulo === 'erp'){
+      const cmp = compararPrioridadePedido(melhorPedidoDoItem(a), melhorPedidoDoItem(b));
+      if(cmp !== 0) return cmp;
+    }
+    return (a.criadoEm||0)-(b.criadoEm||0);
+  });
   const box = $('lista-fila');
   if(!arr.length){
     box.innerHTML = `<div class="text-center text-slate-500 text-xs border border-dashed border-brand-border rounded-xl p-6">Nenhum item pendente. Importe um PDF de separação.</div>`;
@@ -1558,6 +1627,7 @@ function pedidoGrupoHtml(grupo){
 
   const pedidoObj = state.modulo === 'erp' ? pedidoObjDoGrupo(grupo.identificacao) : null;
   const statusIcone = pedidoObj ? STATUS_PEDIDO_ICONE[statusPedidoGrupo(pedidoObj)] : '';
+  const tipoIcone = pedidoObj ? (TIPO_PEDIDO_INFO[pedidoObj.tipoPedido] || TIPO_PEDIDO_INFO.entrega).icone : '';
   const podeAnexarMidia = !!(PICKING_RELATORIOS_API_URL && pedidoObj && pedidoObj.concluidaEm);
   const midias = pedidoObj ? midiasDoPedido(pedidoObj) : [];
   const atingiuMinimo = midias.length >= MIDIAS_MINIMO;
@@ -1583,7 +1653,7 @@ function pedidoGrupoHtml(grupo){
     <div class="flex items-center gap-2 p-3">
       <button class="btn-toggle-pedido-grupo flex-1 text-left flex items-center justify-between gap-2 min-w-0">
         <div class="min-w-0">
-          <div class="font-black text-sm truncate flex items-center gap-1.5">${statusIcone}<span class="truncate">${esc(grupo.identificacao)}</span></div>
+          <div class="font-black text-sm truncate flex items-center gap-1.5">${statusIcone}${tipoIcone}<span class="truncate">${esc(grupo.identificacao)}</span></div>
           <div class="text-[10px] text-slate-500 mt-0.5">${grupo.itens.length} item(ns) · último em ${ultima}</div>
         </div>
         <span class="shrink-0 text-slate-400 text-xs transition-transform ${expandido ? 'rotate-180' : ''}">▾</span>
@@ -2359,6 +2429,7 @@ $('input-pdf-erp').addEventListener('change', async e => {
         cliente: leitura.cabecalho.cliente || '',
         data: leitura.cabecalho.data || '',
         dataPrevista: leitura.cabecalho.dataPrevista || '',
+        tipoPedido: 'entrega', // padrão — o operador pode trocar antes de enviar
         rows: leitura.rows,
         paginasComErro: leitura.paginasComErro
       });
@@ -2397,12 +2468,18 @@ function renderPdfErpPreview(){
   const pedidos = state.erpPedidosSelecionados || [];
   $('pdf-erp-pedidos-count').textContent = pedidos.length;
   $('pdf-erp-pedidos-list').innerHTML = pedidos.map(p => `
-    <div class="bg-brand-card2 border border-brand-border rounded-lg p-2 flex items-center justify-between gap-2" data-temp-id="${p.tempId}">
-      <div class="min-w-0">
-        <div class="text-xs font-bold truncate">#${esc(p.numeroPedido || '?')} — ${esc(p.cliente || 'Cliente não identificado')}</div>
-        <div class="text-[10px] text-slate-500">${p.rows.length} item(ns) · ${esc(p.fileName)}</div>
+    <div class="bg-brand-card2 border border-brand-border rounded-lg p-2 space-y-1.5" data-temp-id="${p.tempId}">
+      <div class="flex items-center justify-between gap-2">
+        <div class="min-w-0">
+          <div class="text-xs font-bold truncate">#${esc(p.numeroPedido || '?')} — ${esc(p.cliente || 'Cliente não identificado')}</div>
+          <div class="text-[10px] text-slate-500">${p.rows.length} item(ns) · ${esc(p.fileName)}</div>
+          <div class="text-[10px] text-slate-500">Pedido: ${esc(p.data||'--')} · Previsão de entrega: ${esc(p.dataPrevista||'--')}</div>
+        </div>
+        <button class="btn-remover-pedido-erp shrink-0 text-[10px] font-black text-red-300 bg-red-500/10 border border-red-500/40 rounded-lg px-2.5 py-1.5">✕</button>
       </div>
-      <button class="btn-remover-pedido-erp shrink-0 text-[10px] font-black text-red-300 bg-red-500/10 border border-red-500/40 rounded-lg px-2.5 py-1.5">✕</button>
+      <select class="sel-tipo-pedido-erp w-full bg-black/40 border border-brand-border rounded-lg px-2 py-1.5 text-[11px] font-bold outline-none">
+        ${TIPO_PEDIDO_ORDEM.map(t => `<option value="${t}" ${(p.tipoPedido||'entrega')===t?'selected':''}>${TIPO_PEDIDO_INFO[t].icone} ${TIPO_PEDIDO_INFO[t].label}</option>`).join('')}
+      </select>
     </div>`).join('');
 
   $('pdf-erp-pedidos-list').querySelectorAll('.btn-remover-pedido-erp').forEach(btn => {
@@ -2411,6 +2488,13 @@ function renderPdfErpPreview(){
       state.erpPedidosSelecionados = state.erpPedidosSelecionados.filter(p => p.tempId !== id);
       renderPdfErpPreview();
       $('pdf-erp-preview-wrap').classList.toggle('hidden', !state.erpPedidosSelecionados.length);
+    });
+  });
+  $('pdf-erp-pedidos-list').querySelectorAll('.sel-tipo-pedido-erp').forEach(sel => {
+    sel.addEventListener('change', e => {
+      const id = sel.closest('[data-temp-id]').dataset.tempId;
+      const pedido = state.erpPedidosSelecionados.find(p => p.tempId === id);
+      if(pedido) pedido.tipoPedido = e.target.value;
     });
   });
 
@@ -2485,6 +2569,7 @@ $('btn-confirmar-import-erp').addEventListener('click', async () => {
       cliente: p.cliente || '',
       dataPedido: p.data || '',
       dataPrevista: p.dataPrevista || '',
+      tipoPedido: p.tipoPedido || 'entrega',
       totalItens: p.rows.length,
       operador: state.operador ? state.operador.nome : '',
       criadoEm: nowTs(),
@@ -2994,7 +3079,11 @@ function formatarRelogio(ms){
 
 function renderImportacoes(){
   const arr = Object.entries(state.importacoes).map(([id,v]) => ({id, ...v})).filter(i => i.status !== 'removido');
-  arr.sort((a,b) => (b.criadoEm||0)-(a.criadoEm||0));
+  // No MKT todo mundo empata (não tem tipoPedido/dataPrevista), então cai
+  // no desempate por mais recente — igual ao comportamento de sempre. No
+  // ERP, emergencial > retirada > entrega, e dentro do mesmo tipo quem
+  // entrega mais cedo vem primeiro.
+  arr.sort((a,b) => compararPrioridadePedido(a,b) || (b.criadoEm||0)-(a.criadoEm||0));
   const box = $(state.modulo === 'erp' ? 'lista-pedidos-erp' : 'lista-importacoes');
   if(!arr.length){
     box.innerHTML = `<div class="text-center text-slate-500 text-xs border border-dashed border-brand-border rounded-xl p-4">Nenhuma importação ainda.</div>`;
@@ -3017,13 +3106,23 @@ function renderImportacoes(){
       botaoCronometro = `<button class="btn-iniciar-cron shrink-0 text-[11px] font-black text-black bg-brand-green rounded-lg px-3 py-1.5">▶ ${jaComecou ? 'Retomar' : 'Iniciar'}</button>`;
     }
 
+    const tipo = TIPO_PEDIDO_INFO[i.tipoPedido] || TIPO_PEDIDO_INFO.entrega;
+    const badgeTipo = state.modulo === 'erp'
+      ? `<button class="btn-tipo-pedido tag-pill ${tipo.classe} border mt-1" data-import-id="${i.id}" title="Toque pra trocar a prioridade">${tipo.icone} ${tipo.label}</button>`
+      : '';
+    const datasArea = state.modulo === 'erp'
+      ? `<div class="text-[10px] text-slate-500">Pedido: ${esc(i.dataPedido||'--')} · Entrega prevista: ${esc(i.dataPrevista||'--')}</div>`
+      : '';
+
     return `
     <div class="bg-brand-card border border-brand-border rounded-xl p-2.5 space-y-2" data-import-id="${i.id}">
       <div class="flex items-center justify-between gap-2">
         <div class="min-w-0">
           <div class="text-xs font-bold truncate">${esc(i.identificacao || 'Sem identificação')} · ${esc(i.totalItens||0)} itens · ${esc(i.operador||'--')}</div>
           <div class="text-[10px] text-slate-500">${i.criadoEm ? new Date(i.criadoEm).toLocaleString('pt-BR') : ''}</div>
+          ${datasArea}
           <div class="text-[10px] text-slate-500 mt-0.5">${pendentes} pendente(s) · ${separados} separado(s) · ${faltando} falta(s)</div>
+          ${badgeTipo}
         </div>
         <button class="btn-remover-import shrink-0 text-[10px] font-black text-red-300 bg-red-500/10 border border-red-500/40 rounded-lg px-2.5 py-2">Remover</button>
       </div>
@@ -3033,6 +3132,16 @@ function renderImportacoes(){
       </div>
     </div>`;
   }).join('');
+
+  box.querySelectorAll('.btn-tipo-pedido').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id = btn.closest('[data-import-id]').dataset.importId;
+      const imp = state.importacoes[id];
+      const atual = (imp && imp.tipoPedido) || 'entrega';
+      const proximo = TIPO_PEDIDO_ORDEM[(TIPO_PEDIDO_ORDEM.indexOf(atual) + 1) % TIPO_PEDIDO_ORDEM.length];
+      await db.ref(`${pathPedidos()}/${id}/tipoPedido`).set(proximo);
+    });
+  });
 
   box.querySelectorAll('.btn-iniciar-cron').forEach(btn => {
     btn.addEventListener('click', async () => {
