@@ -384,6 +384,7 @@
   </div>
 </div>
 <input id="input-foto-camera" type="file" accept="image/*" capture="environment" class="hidden">
+<input id="input-foto-pedido" type="file" accept="image/*" capture="environment" class="hidden">
 
 <!-- ===================== MODAL: CONFIRMAR SEPARAÇÃO ===================== -->
 <div id="modal-confirmar" class="hidden fixed inset-0 z-[85] bg-black/85 flex items-end sm:items-center justify-center p-2">
@@ -500,6 +501,12 @@ const SUPERVISOR_PIN = 'Vesco@2026';
 // Enquanto ficar vazio, o Picking usa só a memória própria (Firebase) para
 // sugerir localização — o Controle de Estoque é opcional e não bloqueia nada.
 const ESTOQUE_API_URL = 'https://script.google.com/macros/s/AKfycbwpxupsuLeD2Luo1GjbCItZI3hQTrXdXJv5SCfNSUTr9m9eQqiEgksJ5SrEQY7QwaQo/exec';
+
+// URL do App da Web do vesco-picking-relatorios (Google Apps Script), usado
+// SÓ pra salvar a foto do pedido concluído no Google Drive. Cole aqui a URL
+// gerada em "Implantar > Nova implantação" (passo 8 do cabeçalho do
+// Code.gs). Enquanto ficar vazio, o botão de foto simplesmente não aparece.
+const PICKING_RELATORIOS_API_URL = 'https://script.google.com/macros/s/AKfycbzJvGO_Oc6u5_peWtroNiqks6cMk_NUd_7T-CQi4DlxXo865I1bsPTnx2pYnaC1gfWPuQ/exec';
 
 /* =========================================================================
  * ESTADO
@@ -1411,6 +1418,93 @@ function separadoCardHtml(item){
   </div>`;
 }
 
+// Versão enxuta pro item DENTRO de um grupo de pedido já expandido — não
+// repete a identificação do pedido (já é o cabeçalho do grupo).
+function separadoItemMiniHtml(item, qtdNessePedido){
+  const foto = item.foto ? `<img src="${esc(item.foto)}" class="w-9 h-9 rounded-lg object-cover bg-black/30 border border-brand-border shrink-0" alt="">` : '';
+  const sobraTag = item.sobra ? `<span class="tag-pill bg-orange-500/15 text-orange-300 border border-orange-500/30">📦 Sobra</span>` : '';
+  const quando = item.dataHoraSeparado ? new Date(item.dataHoraSeparado).toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}) : '--';
+  return `
+  <div class="bg-brand-card2 border border-brand-border rounded-lg p-2 flex items-center gap-2">
+    ${foto}
+    <div class="min-w-0 flex-1">
+      <div class="flex items-center gap-1.5 flex-wrap">
+        <span class="font-black text-xs">${esc(item.sku)}</span>
+        ${sobraTag}
+      </div>
+      <div class="text-[10px] text-slate-400 truncate">${esc(item.descricao||'')}</div>
+      <div class="text-[10px] text-slate-500">Qtd ${fmtQty(qtdNessePedido)} · 👤 ${esc(item.operadorSeparou||'--')} · 🕒 ${quando}</div>
+    </div>
+  </div>`;
+}
+
+// Agrupa os itens separados pelo pedido/lista que eles atendem. Um item
+// unificado (pedidosAgrupados) pode pertencer a mais de um pedido — nesse
+// caso ele aparece dentro de CADA grupo, com a quantidade daquele pedido
+// específico (não a quantidade total separada).
+function agruparSeparadosPorPedido(arr){
+  const porPedido = {};
+  arr.forEach(item => {
+    const pedidos = (Array.isArray(item.pedidosAgrupados) && item.pedidosAgrupados.length)
+      ? item.pedidosAgrupados
+      : [{ identificacao: item.identificacao || 'Sem identificação', quantidade: item.qtdSeparada }];
+    const jaContado = new Set(); // evita duplicar se o mesmo pedido aparecer 2x no array (raro, mas defensivo)
+    pedidos.forEach(p => {
+      const key = (p.identificacao || 'Sem identificação').trim();
+      if(jaContado.has(key)) return;
+      jaContado.add(key);
+      if(!porPedido[key]) porPedido[key] = { identificacao: key, itens: [], ultimaSeparacao: 0 };
+      porPedido[key].itens.push({ item, qtd: p.quantidade });
+      porPedido[key].ultimaSeparacao = Math.max(porPedido[key].ultimaSeparacao, item.dataHoraSeparado || 0);
+    });
+  });
+  return Object.values(porPedido).sort((a,b) => b.ultimaSeparacao - a.ultimaSeparacao);
+}
+
+state.separadosExpandidos = new Set(); // quais pedidos estão abertos (sobrevive a re-render)
+
+// Acha o registro do pedido (na aba Pedidos/Importações) cuja identificação
+// bate com a do grupo — é de lá que vem "concluidaEm" (todo item já
+// terminado) e a fotoUrl já salva, se existir.
+function pedidoObjDoGrupo(identificacao){
+  return Object.entries(state.importacoes).map(([id,v]) => ({id, ...v})).find(p => p.identificacao === identificacao);
+}
+
+function pedidoGrupoHtml(grupo){
+  const expandido = state.separadosExpandidos.has(grupo.identificacao);
+  const ultima = grupo.ultimaSeparacao ? new Date(grupo.ultimaSeparacao).toLocaleString('pt-BR') : '--';
+
+  const pedidoObj = state.modulo === 'erp' ? pedidoObjDoGrupo(grupo.identificacao) : null;
+  const concluido = pedidoObj && pedidoObj.concluidaEm;
+  const podeFotografar = !!(PICKING_RELATORIOS_API_URL && concluido);
+
+  let fotoArea = '';
+  if(pedidoObj && pedidoObj.fotoUrl){
+    fotoArea = `<a href="${esc(pedidoObj.fotoUrl)}" target="_blank" rel="noopener" class="shrink-0">
+      <img src="${esc(pedidoObj.fotoUrl)}" class="w-10 h-10 rounded-lg object-cover border border-brand-border" alt="Foto do pedido">
+    </a>`;
+  } else if(podeFotografar){
+    fotoArea = `<button class="btn-foto-pedido shrink-0 text-[10px] font-black text-sky-300 bg-sky-500/10 border border-sky-500/40 rounded-lg px-2.5 py-2" data-pedido-id="${esc(pedidoObj.id)}" data-numero="${esc(pedidoObj.numeroPedido||'')}" data-cliente="${esc(pedidoObj.cliente||'')}">📷 Foto</button>`;
+  }
+
+  return `
+  <div class="bg-brand-card border border-brand-border rounded-xl overflow-hidden" data-pedido-grupo="${esc(grupo.identificacao)}">
+    <div class="flex items-center gap-2 p-3">
+      <button class="btn-toggle-pedido-grupo flex-1 text-left flex items-center justify-between gap-2 min-w-0">
+        <div class="min-w-0">
+          <div class="font-black text-sm truncate">${esc(grupo.identificacao)}</div>
+          <div class="text-[10px] text-slate-500 mt-0.5">${grupo.itens.length} item(ns) · último em ${ultima}</div>
+        </div>
+        <span class="shrink-0 text-slate-400 text-xs transition-transform ${expandido ? 'rotate-180' : ''}">▾</span>
+      </button>
+      ${fotoArea}
+    </div>
+    <div class="grupo-itens ${expandido ? '' : 'hidden'} px-3 pb-3 space-y-1.5">
+      ${grupo.itens.map(({item, qtd}) => separadoItemMiniHtml(item, qtd)).join('')}
+    </div>
+  </div>`;
+}
+
 // YYYY-MM-DD no fuso local (não UTC) — usado pelo <input type="date"> e para
 // comparar com dataHoraSeparado (timestamp) dia a dia.
 function dataLocalISO(ts){
@@ -1453,7 +1547,22 @@ function renderSeparados(){
   if(!arr.length){
     box.innerHTML = `<div class="text-center text-slate-500 text-xs border border-dashed border-brand-border rounded-xl p-6">Nenhum item separado${sufixoData || (termo ? ' com esse filtro' : '')}.</div>`;
   } else {
-    box.innerHTML = arr.map(separadoCardHtml).join('');
+    const grupos = agruparSeparadosPorPedido(arr);
+    box.innerHTML = grupos.map(pedidoGrupoHtml).join('');
+    box.querySelectorAll('.btn-toggle-pedido-grupo').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const chave = btn.closest('[data-pedido-grupo]').dataset.pedidoGrupo;
+        if(state.separadosExpandidos.has(chave)) state.separadosExpandidos.delete(chave);
+        else state.separadosExpandidos.add(chave);
+        renderSeparados();
+      });
+    });
+    box.querySelectorAll('.btn-foto-pedido').forEach(btn => {
+      btn.addEventListener('click', () => {
+        state.pedidoFotoAtual = { pedidoId: btn.dataset.pedidoId, numeroPedido: btn.dataset.numero, cliente: btn.dataset.cliente };
+        $('input-foto-pedido').click();
+      });
+    });
   }
 }
 
@@ -1461,6 +1570,77 @@ $('busca-separados').addEventListener('input', renderSeparados);
 $('separados-data').addEventListener('change', renderSeparados);
 $('btn-separados-hoje').addEventListener('click', () => { $('separados-data').value = hojeISO(); renderSeparados(); });
 $('btn-separados-todos').addEventListener('click', () => { $('separados-data').value = ''; renderSeparados(); });
+
+/* =========================================================================
+ * FOTO DO PEDIDO (ERP) — salva no Google Drive via vesco-picking-relatorios.
+ * O Apps Script Web App não aceita POST grande (o redirecionamento dele
+ * derruba o corpo), então a foto vai primeiro pro Firebase (que aguenta
+ * numa boa) e só a REFERÊNCIA é mandada pro Apps Script por GET — o script
+ * busca o conteúdo real lá e apaga o temporário depois de salvar no Drive.
+ * =======================================================================*/
+
+state.pedidoFotoAtual = null;
+
+// Redimensiona/comprime no navegador antes de enviar — importante pro
+// upload não travar numa rede de 3G/4G dentro do galpão.
+function comprimirImagem(file, maxLado, qualidade){
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      let { width, height } = img;
+      if(width > maxLado || height > maxLado){
+        if(width > height){ height = Math.round(height * maxLado / width); width = maxLado; }
+        else { width = Math.round(width * maxLado / height); height = maxLado; }
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width; canvas.height = height;
+      canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+      const base64 = canvas.toDataURL('image/jpeg', qualidade).split(',')[1];
+      resolve({ base64, mimeType: 'image/jpeg' });
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Não consegui abrir a imagem')); };
+    img.src = url;
+  });
+}
+
+$('input-foto-pedido').addEventListener('change', async e => {
+  const file = e.target.files[0];
+  e.target.value = '';
+  const alvo = state.pedidoFotoAtual;
+  state.pedidoFotoAtual = null;
+  if(!file || !alvo) return;
+  if(!PICKING_RELATORIOS_API_URL){ toast('Foto do pedido ainda não configurada (falta a URL do Apps Script)', 'warn'); return; }
+
+  toast('Enviando foto...', 'info');
+  let tempRef = null;
+  try {
+    const { base64, mimeType } = await comprimirImagem(file, 1280, 0.72);
+
+    tempRef = db.ref(`${ROOT_ERP}/fotosTemp`).push();
+    await tempRef.set({ base64, mimeType, criadoEm: nowTs() });
+
+    const url = `${PICKING_RELATORIOS_API_URL}?action=salvarFotoPedido&ref=${encodeURIComponent(tempRef.key)}` +
+      `&numeroPedido=${encodeURIComponent(alvo.numeroPedido||'')}&cliente=${encodeURIComponent(alvo.cliente||'')}`;
+    const resp = await fetch(url);
+    const data = await resp.json();
+
+    if(!data.ok){
+      toast('Erro ao salvar a foto: ' + (data.error||'desconhecido'), 'error');
+      return;
+    }
+
+    await db.ref(`${pathPedidos()}/${alvo.pedidoId}`).update({ fotoUrl: data.url, fotoViewUrl: data.viewUrl || data.url });
+    toast('📷 Foto do pedido salva!', 'ok');
+  } catch(err){
+    toast('Erro ao enviar a foto: ' + (err.message||err), 'error');
+  } finally {
+    // Se algo deu errado depois de já ter escrito o temporário, não deixa
+    // lixo acumulando no Firebase.
+    if(tempRef) tempRef.remove().catch(()=>{});
+  }
+});
 
 /* =========================================================================
  * SOBRAS — produto separado que não chegou a ser embalado (motivo + histórico)
