@@ -2229,23 +2229,39 @@ async function extractRowsFromPdfBuffer(buf, onProgress){
  * reais (12 e 3 itens) — bateu 100% com o "Número de itens" impresso.
  * =======================================================================*/
 
-const ERP_HEADER_LABELS = new Set(['Item', 'SKU | GTIN |', 'NCM', 'Qtd', 'Un', 'Preço un', 'Total']);
 const ERP_STOP_MARKER = 'Número de itens:';
+
+// Cobre as variações já vistas entre filiais/modelos de PDF: "Item"/"Qtd"/
+// "Un"/"Preço un"/"Total" são estáveis, mas a coluna de código muda de
+// texto ("SKU | GTIN |" + "NCM" separado, OU "Código (SKU) /" + "GTIN /
+// NCM" juntos) — por isso ela é reconhecida por CONTEÚDO (contém "sku" ou
+// "gtin"), não string exata. O mesmo teste serve tanto pra achar a coluna
+// quanto pra excluir a segunda linha do cabeçalho (senão ela vira um
+// "código" de produto fantasma no primeiro item da lista).
+function nomeColunaErpPara(str){
+  const s = str.trim();
+  const low = s.toLowerCase();
+  if(s === 'Item') return 'produto';
+  if(low.includes('sku') || low.includes('gtin')) return 'codigo';
+  if(s === 'Qtd' || s === 'Qtd.') return 'qtd';
+  if(s === 'Un' || s === 'Un.') return 'un';
+  if(low.includes('preço') || low.includes('preco')) return 'preco';
+  if(s === 'Total') return 'total';
+  return null;
+}
 
 function isNcmNoise(str){
   return str === 'NCM' || /^:\s*[\d.]+$/.test(str);
 }
 
 function detectarColunasErp(items){
-  const mapa = { 'Item': 'produto', 'SKU | GTIN |': 'codigo', 'Qtd': 'qtd', 'Un': 'un', 'Preço un': 'preco', 'Total': 'total' };
   const cols = {};
   let headerY = null;
   for(const it of items){
-    const nome = mapa[it.str];
-    if(nome && cols[nome] === undefined){
-      cols[nome] = it.x;
-      if(headerY === null || it.y > headerY) headerY = it.y;
-    }
+    const nome = nomeColunaErpPara(it.str);
+    if(!nome) continue;
+    if(headerY === null || it.y > headerY) headerY = it.y;
+    if(cols[nome] === undefined) cols[nome] = it.x;
   }
   return { cols, headerY };
 }
@@ -2284,7 +2300,7 @@ function parsePedidoErp(paginas){
     const { cols, headerY } = detectarColunasErp(items);
     for(const it of items){
       if(it.str === ERP_STOP_MARKER){ flush(); break outer; }
-      if(ERP_HEADER_LABELS.has(it.str)) continue;
+      if(nomeColunaErpPara(it.str)) continue; // rótulo de cabeçalho, em qualquer uma das linhas dele
       if(isNcmNoise(it.str)) continue;
       if(headerY !== null && it.y >= headerY) continue;
       const col = colunaErpFor(it.x, cols);
@@ -2347,9 +2363,23 @@ function linhaDeCimaErp_(items, label, janelaY, maxDx){
   return melhor ? melhor.str : '';
 }
 
+// O número do pedido vem do TÍTULO ("Pedido de Venda Nº 39395") — é estável
+// nos modelos vistos até agora. Não dá pra confiar só na caixa de info: o
+// rótulo lá muda ("Número do pedido" vs "N° pedido e-commerce"), e nesse
+// segundo caso é um número DIFERENTE (a referência da loja virtual, não o
+// número real do pedido) — por isso o título é a fonte principal, e o
+// campo da caixa fica só como reserva pra um formato ainda não visto.
+function extrairNumeroPedidoDoTitulo_(items){
+  for(const it of items){
+    const m = it.str.match(/Pedido de Venda\s*N[ºo°]?\s*(\d+)/i);
+    if(m) return m[1];
+  }
+  return '';
+}
+
 function extrairCabecalhoErp(items){
   return {
-    numeroPedido: valorMaisProximoErp_(items, 'Número do pedido', 3, 150),
+    numeroPedido: extrairNumeroPedidoDoTitulo_(items) || valorMaisProximoErp_(items, 'Número do pedido', 3, 150),
     cliente: linhaDeCimaErp_(items, 'Cliente', 8, 150),
     data: valorMaisProximoErp_(items, 'Data', 3, 150),
     dataPrevista: valorMaisProximoErp_(items, 'Data prevista', 3, 150)
