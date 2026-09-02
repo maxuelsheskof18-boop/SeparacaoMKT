@@ -434,7 +434,11 @@
 
     <div class="grid grid-cols-1 gap-2 pt-1">
       <button id="btn-confirmar-separacao" class="min-h-[52px] rounded-xl bg-brand-green text-black font-black text-sm">✔ Confirmar Separação</button>
-      <button id="btn-nao-encontrado" class="min-h-[48px] rounded-xl bg-brand-yellow text-black font-black text-sm">Não Encontrado</button>
+      <div class="text-[10px] text-slate-500 font-bold uppercase text-center -mb-1">Não encontrado — por quê?</div>
+      <div class="grid grid-cols-2 gap-2">
+        <button id="btn-nao-encontrado-falta" class="btn-nao-encontrado min-h-[48px] rounded-xl bg-brand-yellow text-black font-black text-xs" data-motivo="Falta o produto (sem estoque)">📭 Falta o produto</button>
+        <button id="btn-nao-encontrado-local" class="btn-nao-encontrado min-h-[48px] rounded-xl bg-brand-yellow text-black font-black text-xs" data-motivo="Está em outro local — precisa buscar lá">📍 Está em outro local</button>
+      </div>
       <button id="btn-cancelar-confirmar" class="min-h-[42px] rounded-xl bg-transparent border border-brand-border font-bold text-xs text-slate-400">Cancelar</button>
     </div>
   </div>
@@ -998,6 +1002,7 @@ function itemCardHtml(item){
           </div>
           <div class="text-[11px] text-slate-400 truncate">${esc(item.descricao||'')}</div>
           <div class="text-[10px] text-slate-500 mt-0.5">${origem}${esc(item.identificacao||'Sem identificação')} · ${esc(item.galpao||'--')} · Qtd ${fmtQty(item.qtdPedida)}</div>
+          ${item.status === 'revisao' && item.revisaoMotivo ? `<div class="text-[10px] text-yellow-300 mt-0.5">⚠ ${esc(item.revisaoMotivo)} (${esc(item.revisaoOperador1||'--')})</div>` : ''}
         </div>
       </div>
       <div class="flex items-center gap-1.5 shrink-0">
@@ -1267,68 +1272,79 @@ $('btn-confirmar-separacao').addEventListener('click', async () => {
   state.itemAtual = null;
 });
 
-$('btn-nao-encontrado').addEventListener('click', async () => {
-  const item = state.itemAtual;
-  if(!item || !state.operador) return;
-  const ref = db.ref(`${pathFila()}/${item.id}`);
-  let finalStatus = null;
-  try {
-    const result = await ref.transaction(cur => {
-      if(!cur) return cur;
-      if(cur.status === 'pendente'){
-        cur.status = 'revisao';
-        cur.revisaoMotivo = 'Não encontrado';
-        cur.revisaoOperador1 = state.operador.nome;
-        cur.revisaoTs1 = nowTs();
-        cur.atualizadoEm = nowTs();
-        cur.emSeparacaoPor = null;
-        cur.emSeparacaoDesde = null;
-        return cur;
+document.querySelectorAll('.btn-nao-encontrado').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const item = state.itemAtual;
+    if(!item || !state.operador) return;
+    const motivo = btn.dataset.motivo || 'Não encontrado';
+    const ref = db.ref(`${pathFila()}/${item.id}`);
+    let finalStatus = null;
+    try {
+      const result = await ref.transaction(cur => {
+        if(!cur) return cur;
+        if(cur.status === 'pendente'){
+          cur.status = 'revisao';
+          cur.revisaoMotivo = motivo;
+          cur.revisaoOperador1 = state.operador.nome;
+          cur.revisaoTs1 = nowTs();
+          cur.atualizadoEm = nowTs();
+          cur.emSeparacaoPor = null;
+          cur.emSeparacaoDesde = null;
+          return cur;
+        }
+        if(cur.status === 'revisao'){
+          cur.status = 'falta_definitiva';
+          cur.revisaoMotivo2 = motivo;
+          cur.revisaoOperador2 = state.operador.nome;
+          cur.revisaoTs2 = nowTs();
+          cur.atualizadoEm = nowTs();
+          cur.emSeparacaoPor = null;
+          cur.emSeparacaoDesde = null;
+          return cur;
+        }
+        return; // outro status: aborta
+      });
+      if(result.committed){
+        const salvo = result.snapshot.val() || {};
+        finalStatus = salvo.status;
+        if(finalStatus === 'falta_definitiva'){
+          verificarConclusaoImportacoes(Object.assign({ id: item.id }, salvo)).catch(()=>{});
+        }
+      } else {
+        toast('Este item já foi atualizado por outro operador.', 'warn');
       }
-      if(cur.status === 'revisao'){
-        cur.status = 'falta_definitiva';
-        cur.revisaoOperador2 = state.operador.nome;
-        cur.revisaoTs2 = nowTs();
-        cur.atualizadoEm = nowTs();
-        cur.emSeparacaoPor = null;
-        cur.emSeparacaoDesde = null;
-        return cur;
-      }
-      return; // outro status: aborta
-    });
-    if(result.committed){
-      const salvo = result.snapshot.val() || {};
-      finalStatus = salvo.status;
-      if(finalStatus === 'falta_definitiva'){
-        verificarConclusaoImportacoes(Object.assign({ id: item.id }, salvo)).catch(()=>{});
-      }
-    } else {
-      toast('Este item já foi atualizado por outro operador.', 'warn');
+    } catch(e){
+      toast('Erro ao salvar: ' + (e.message||e), 'error');
     }
-  } catch(e){
-    toast('Erro ao salvar: ' + (e.message||e), 'error');
-  }
 
-  if(finalStatus === 'revisao'){
-    toast(`${item.sku} marcado para Revisão`, 'warn');
-  } else if(finalStatus === 'falta_definitiva'){
-    await db.ref(`${pathPausar()}/${item.id}`).set({
-      sku: item.sku,
-      descricao: item.descricao || '',
-      identificacao: item.identificacao || '',
-      galpao: item.galpao || '',
-      motivo: 'Falta definitiva confirmada por dois operadores',
-      operador1: item.revisaoOperador1 || '',
-      operador2: state.operador.nome,
-      status: 'aberto',
-      criadoEm: nowTs()
-    });
-    toast(`🚫 ${item.sku}: Falta Definitiva — equipe de e-commerce avisada`, 'error');
-    vibrate([60,80,60,80]);
-  }
+    if(finalStatus === 'revisao'){
+      toast(`${item.sku} marcado para Revisão — ${motivo}`, 'warn');
+    } else if(finalStatus === 'falta_definitiva'){
+      // "Pausar Anúncios" só existe no MKT (pathPausar() vem null no ERP) —
+      // sem essa checagem, um item do ERP chegando na 2ª falta quebrava
+      // aqui silenciosamente.
+      if(pathPausar()){
+        await db.ref(`${pathPausar()}/${item.id}`).set({
+          sku: item.sku,
+          descricao: item.descricao || '',
+          identificacao: item.identificacao || '',
+          galpao: item.galpao || '',
+          motivo: 'Falta definitiva confirmada por dois operadores',
+          operador1: item.revisaoOperador1 || '',
+          operador2: state.operador.nome,
+          status: 'aberto',
+          criadoEm: nowTs()
+        });
+        toast(`🚫 ${item.sku}: Falta Definitiva — equipe de e-commerce avisada`, 'error');
+      } else {
+        toast(`🚫 ${item.sku}: Falta Definitiva confirmada por dois operadores`, 'error');
+      }
+      vibrate([60,80,60,80]);
+    }
 
-  $('modal-confirmar').classList.add('hidden');
-  state.itemAtual = null;
+    $('modal-confirmar').classList.add('hidden');
+    state.itemAtual = null;
+  });
 });
 
 /* =========================================================================
@@ -1375,21 +1391,34 @@ function itemNoPeriodo(ts){
   return d.getFullYear() === ano && (d.getMonth()+1) === mes;
 }
 
+// Mesma ideia do relatório na planilha: um item pode atender mais de um
+// pedido (unificado via pedidosAgrupados) — conta cada um separadamente.
+function identificacoesDoItemCliente(item){
+  if(Array.isArray(item.pedidosAgrupados) && item.pedidosAgrupados.length){
+    return [...new Set(item.pedidosAgrupados.map(p => (p.identificacao || 'Sem identificação').trim()))];
+  }
+  return [(item.identificacao || 'Sem identificação').trim()];
+}
+
 function computeProdutividade(){
   const arr = itemsArray();
   const porOperador = {};
-  const get = nome => (porOperador[nome] = porOperador[nome] || { nome, pacotes: 0, penalidades: 0 });
+  const get = nome => (porOperador[nome] = porOperador[nome] || { nome, pacotes: 0, penalidades: 0, pedidos: new Set() });
 
   arr.forEach(i => {
     if(i.status === 'separado' && i.operadorSeparou && itemNoPeriodo(i.dataHoraSeparado)){
-      get(i.operadorSeparou).pacotes++;
+      const op = get(i.operadorSeparou);
+      op.pacotes++;
+      identificacoesDoItemCliente(i).forEach(id => op.pedidos.add(id));
     }
     if(i.penalidadeAplicada && i.penalidadeOperador && itemNoPeriodo(i.penalidadeTs)){
       get(i.penalidadeOperador).penalidades++;
     }
   });
 
-  return Object.values(porOperador).sort((a,b) => b.pacotes - a.pacotes || a.nome.localeCompare(b.nome,'pt-BR'));
+  return Object.values(porOperador)
+    .map(op => ({ nome: op.nome, pacotes: op.pacotes, penalidades: op.penalidades, pedidosAtendidos: op.pedidos.size }))
+    .sort((a,b) => b.pacotes - a.pacotes || a.nome.localeCompare(b.nome,'pt-BR'));
 }
 
 // Resumo geral (independente do toggle Hoje/Mês da lista por operador
@@ -1441,7 +1470,7 @@ function renderProdutividade(){
         <div class="w-7 h-7 rounded-full bg-brand-card2 border border-brand-border flex items-center justify-center text-[11px] font-black shrink-0">${idx+1}º</div>
         <div class="min-w-0">
           <div class="font-black text-sm truncate">${esc(op.nome)}</div>
-          <div class="text-[10px] text-slate-500">${op.pacotes} pacote(s) separado(s) · toque pra ver quais</div>
+          <div class="text-[10px] text-slate-500">${op.pacotes} item(ns) · ${op.pedidosAtendidos} pedido(s)/lista(s) · toque pra ver quais</div>
         </div>
       </div>
       ${op.penalidades > 0 ? `<span class="tag-pill bg-red-500/15 text-red-300 border border-red-500/30 shrink-0">⚠ ${op.penalidades} penalidade${op.penalidades>1?'s':''}</span>` : ''}
