@@ -519,7 +519,7 @@ const GALPOES = ['Leopoldo', '21 de Abril', 'Cesário'];
 // Pra lançar uma novidade: só bumpar APP_VERSAO e acrescentar um item aqui.
 const APP_VERSAO = '2026-09-09.1';
 const NOVIDADES_ATUAIS = [
-  'Filtro por dia na aba Pedidos (ERP) — dá pra ver quais pedidos já foram enviados em cada data.',
+  'Filtro por dia na aba Pedidos (ERP) — dá pra ver quais pedidos entraram em cada data e o status de cada um.',
   'Novo botão "📉 Estoque baixo" em cada item, pra avisar quando o produto tá acabando.'
 ];
 
@@ -3201,18 +3201,19 @@ function renderImportacoes(){
   arr.sort((a,b) => compararPrioridadePedido(a,b) || (b.criadoEm||0)-(a.criadoEm||0));
   const box = $(state.modulo === 'erp' ? 'lista-pedidos-erp' : 'lista-importacoes');
 
-  // Filtro de dia (só no ERP): mostra quais pedidos já foram ENVIADOS
-  // (concluídos) numa data específica. Sem data selecionada ("Todos"),
-  // mantém o comportamento de sempre — mostra tudo, inclusive pendentes.
+  // Filtro de dia (só no ERP): mostra os pedidos que ENTRARAM (foram
+  // importados) numa data específica — concluídos ou não. O status de cada
+  // um (✅ Concluída às… / ▶ Iniciar) continua aparecendo no card. Sem data
+  // selecionada ("Todos"), mostra tudo, igual ao comportamento de sempre.
   const filtroDataEl = $('pedidos-erp-data');
   const dataFiltro = state.modulo === 'erp' && filtroDataEl ? filtroDataEl.value : '';
   if(dataFiltro){
-    arr = arr.filter(i => i.concluidaEm && dataLocalISO(i.concluidaEm) === dataFiltro);
+    arr = arr.filter(i => i.criadoEm && dataLocalISO(i.criadoEm) === dataFiltro);
   }
 
   if(!arr.length){
     const msg = dataFiltro
-      ? `Nenhum pedido enviado em ${dataFiltro.split('-').reverse().join('/')}.`
+      ? `Nenhum pedido entrou em ${dataFiltro.split('-').reverse().join('/')}.`
       : 'Nenhuma importação ainda.';
     box.innerHTML = `<div class="text-center text-slate-500 text-xs border border-dashed border-brand-border rounded-xl p-4">${msg}</div>`;
     return;
