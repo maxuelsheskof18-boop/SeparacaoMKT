@@ -345,6 +345,8 @@
         Produtos com <b>falta definitiva</b> confirmada por dois operadores. Pausar os anúncios correspondentes até repor o estoque.
       </div>
       <div id="lista-pausar" class="space-y-2"></div>
+      <div class="font-black text-sm mt-4 mb-1.5">✅ Repostos recentes</div>
+      <div id="lista-repostos" class="space-y-2"></div>
     </div>
   </section>
 
@@ -391,6 +393,7 @@
 <input id="input-foto-camera" type="file" accept="image/*" capture="environment" class="hidden">
 <input id="input-foto-pedido" type="file" accept="image/*" capture="environment" class="hidden">
 <input id="input-video-pedido" type="file" accept="video/*" capture="environment" class="hidden">
+<input id="input-foto-repor" type="file" accept="image/*" capture="environment" class="hidden">
 
 <!-- ===================== MODAL: CONFIRMAR SEPARAÇÃO ===================== -->
 <div id="modal-confirmar" class="hidden fixed inset-0 z-[85] bg-black/85 flex items-end sm:items-center justify-center p-2">
@@ -517,8 +520,10 @@ const GALPOES = ['Leopoldo', '21 de Abril', 'Cesário'];
 // a solução é comparar a versão atual com a última vista NESSE aparelho
 // (localStorage) — se mudou, mostra um modal com o que foi adicionado.
 // Pra lançar uma novidade: só bumpar APP_VERSAO e acrescentar um item aqui.
-const APP_VERSAO = '2026-09-09.1';
+const APP_VERSAO = '2026-09-14.1';
 const NOVIDADES_ATUAIS = [
+  'Novo botão "↩️" (admin, pede PIN) pra devolver um item já separado ou em revisão de volta pra fila.',
+  'Aba Anúncios: "Marcar como reposto" agora pede quantidade e foto, com histórico de repostos recentes.',
   'Filtro por dia na aba Pedidos (ERP) — dá pra ver quais pedidos entraram em cada data e o status de cada um.',
   'Novo botão "📉 Estoque baixo" em cada item, pra avisar quando o produto tá acabando.'
 ];
@@ -558,6 +563,65 @@ function compararPrioridadePedido(a, b){
 // PIN client-side apenas para reduzir acesso casual à aba "Pausar Anúncios".
 // Isso NÃO é segurança de verdade — para produção, restrinja por Firebase Auth + regras server-side.
 const SUPERVISOR_PIN = 'Vesco@2026';
+
+// Mesmo PIN usado para liberar ações de admin fora da aba "Pausar Anúncios"
+// (ex: reverter um item já separado de volta pra fila). Uma vez digitado
+// certo, fica liberado o resto da sessão (mesma trava de "picking_pin_ok"
+// que já libera a aba restrita) — não precisa digitar de novo toda hora.
+function pedirPinAdmin(){
+  if(safeGet('session', 'picking_pin_ok') === '1') return true;
+  const pin = prompt('Ação de administrador — digite o PIN:');
+  if(pin === null) return false;
+  if(pin.trim() === SUPERVISOR_PIN){
+    safeSet('session', 'picking_pin_ok', '1');
+    return true;
+  }
+  toast('PIN incorreto', 'error');
+  return false;
+}
+
+// Devolve um item (separado, em revisão ou com falta definitiva) pro estado
+// "pendente" — some tudo que aconteceu na tentativa anterior de separação
+// pra ele voltar limpinho pra fila, como se nunca tivesse sido mexido.
+// Fica de fora do fluxo normal de propósito: só admin (via PIN) deve poder
+// desfazer uma separação já confirmada.
+async function reverterItemParaFila(itemId){
+  if(!pedirPinAdmin()) return;
+  const item = state.fila[itemId];
+  if(!item) return;
+  if(!confirm(`Reverter "${item.sku}" para a fila (volta a pendente)? A separação atual será desfeita.`)) return;
+  try {
+    await db.ref(`${pathFila()}/${itemId}`).update({
+      status: 'pendente',
+      qtdSeparada: null,
+      localFisico: null,
+      operadorSeparou: null,
+      dataHoraSeparado: null,
+      tempoBuscaMs: null,
+      buscaIniciadaEm: null,
+      buscaIniciadaPor: null,
+      revisaoMotivo: null,
+      revisaoOperador1: null,
+      revisaoTs1: null,
+      revisaoMotivo2: null,
+      revisaoOperador2: null,
+      revisaoTs2: null,
+      sobra: null,
+      sobraMotivo: null,
+      sobraObs: null,
+      sobraOperador: null,
+      sobraTs: null,
+      emSeparacaoPor: null,
+      emSeparacaoDesde: null,
+      atualizadoEm: nowTs(),
+      revertidoPor: state.operador ? state.operador.nome : 'admin',
+      revertidoEm: nowTs()
+    });
+    toast(`↩️ ${item.sku} devolvido para a fila`, 'ok');
+  } catch(e){
+    toast('Erro ao reverter: ' + (e.message||e), 'error');
+  }
+}
 
 // URL do App da Web do projeto "vesco-estoque-app" (Google Apps Script), depois
 // de implantado. Ex: "https://script.google.com/macros/s/AKfycb.../exec".
@@ -1019,6 +1083,12 @@ function itemCardHtml(item){
   // produto pode estar acabando no estoque) — por isso não tem "podeX" aqui.
   const btnEstoqueBaixo = `<button class="btn-estoque-baixo-item shrink-0 min-h-[40px] px-2.5 rounded-xl ${item.estoqueBaixo ? 'bg-orange-500/20 border border-orange-500/50 text-orange-300' : 'bg-brand-card2 border border-brand-border text-slate-400'} font-black text-xs" title="${item.estoqueBaixo ? 'Remover aviso de estoque baixo' : 'Avisar que o estoque está baixo/acabando'}">📉</button>`;
 
+  // Só faz sentido "devolver pra fila" um item que já saiu do fluxo normal
+  // (revisão) — pendente já está na fila. Ação de admin, pede PIN na hora do clique.
+  const btnReverterAdmin = item.status === 'revisao'
+    ? `<button class="btn-reverter-item shrink-0 min-h-[40px] px-2.5 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 font-black text-xs" title="Admin: devolver pra fila (pendente)">↩️</button>`
+    : '';
+
   return `
   <div class="bg-brand-card border ${item.status==='revisao' ? 'border-brand-yellow/50' : 'border-brand-border'} rounded-xl p-3 space-y-2" data-item-id="${item.id}">
     <div class="flex items-center justify-between gap-2">
@@ -1041,6 +1111,7 @@ function itemCardHtml(item){
       </div>
       <div class="flex items-center gap-1.5 shrink-0">
         ${btnEstoqueBaixo}
+        ${btnReverterAdmin}
         ${btnBuscar}
         <button class="btn-abrir-item shrink-0 min-h-[40px] px-3 rounded-xl bg-brand-blue text-black font-black text-xs">Abrir</button>
       </div>
@@ -1127,6 +1198,12 @@ function bindOpenButtons(box){
         await db.ref(`${pathFila()}/${id}`).update({ estoqueBaixo: true, estoqueBaixoPor: state.operador.nome, estoqueBaixoEm: nowTs() });
         toast('📉 Estoque baixo apontado', 'ok');
       }
+    });
+  });
+  box.querySelectorAll('.btn-reverter-item').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.closest('[data-item-id]').dataset.itemId;
+      reverterItemParaFila(id);
     });
   });
 }
@@ -1586,6 +1663,7 @@ function separadoItemMiniHtml(item, qtdNessePedido){
       <div class="text-[10px] text-slate-400 truncate">${esc(item.descricao||'')}</div>
       <div class="text-[10px] text-slate-500">Qtd ${fmtQty(qtdNessePedido)} · 👤 ${esc(item.operadorSeparou||'--')} · 🕒 ${quando}</div>
     </div>
+    <button class="btn-reverter-item shrink-0 min-h-[34px] px-2 rounded-lg bg-red-500/10 border border-red-500/30 text-red-300 font-bold text-[10px]" data-item-id="${item.id}" title="Admin: devolver esse item pra fila (desfaz a separação)">↩️</button>
   </div>`;
 }
 
@@ -1810,6 +1888,9 @@ function renderSeparados(){
         state.pedidoFotoAtual = { pedidoId: btn.dataset.pedidoId, numeroPedido: btn.dataset.numero, cliente: btn.dataset.cliente };
         $('input-video-pedido').click();
       });
+    });
+    box.querySelectorAll('.btn-reverter-item').forEach(btn => {
+      btn.addEventListener('click', () => reverterItemParaFila(btn.dataset.itemId));
     });
   }
 }
@@ -2105,12 +2186,77 @@ function renderPausar(){
     box.querySelectorAll('.btn-repor').forEach(btn => {
       btn.addEventListener('click', async () => {
         const id = btn.closest('[data-pausar-id]').dataset.pausarId;
-        await db.ref(`${pathPausar()}/${id}`).update({ status: 'reposto', repostoEm: nowTs(), repostoPor: state.operador ? state.operador.nome : '' });
-        toast('Marcado como reposto', 'ok');
+        const qtdStr = prompt('Quantas unidades chegaram/foram repostas?');
+        if(qtdStr === null) return; // cancelou, não marca nada
+        const qtd = Number(String(qtdStr).replace(',', '.'));
+        if(!qtd || qtd <= 0){ toast('Quantidade inválida', 'warn'); return; }
+        try {
+          await db.ref(`${pathPausar()}/${id}`).update({
+            status: 'reposto',
+            repostoEm: nowTs(),
+            repostoPor: state.operador ? state.operador.nome : '',
+            quantidadeReposta: qtd
+          });
+        } catch(e){
+          toast('Erro ao salvar: ' + (e.message||e), 'error');
+          return;
+        }
+        toast(`✔ Marcado como reposto (${fmtQty(qtd)} un.)`, 'ok');
+        // Foto é o "comprovante" de que chegou de verdade — pede na sequência,
+        // mas sem travar o que já foi salvo se o operador cancelar a câmera.
+        state.pausarFotoAtual = id;
+        $('input-foto-repor').click();
       });
     });
   }
+  renderRepostos();
 }
+
+// Histórico de "reposto" — sem isso, marcar como reposto só fazia o item
+// desaparecer da lista pra sempre, sem nenhum jeito de conferir depois
+// quanto chegou e quando.
+function renderRepostos(){
+  const box = $('lista-repostos');
+  if(!box) return;
+  const arr = Object.entries(state.pausar).map(([id,v]) => ({id, ...v}))
+    .filter(i => i.status === 'reposto')
+    .sort((a,b) => (b.repostoEm||0) - (a.repostoEm||0))
+    .slice(0, 30);
+  if(!arr.length){
+    box.innerHTML = `<div class="text-center text-slate-500 text-xs border border-dashed border-brand-border rounded-xl p-4">Nenhum reposto registrado ainda.</div>`;
+    return;
+  }
+  box.innerHTML = arr.map(i => {
+    const foto = i.fotoReposicao
+      ? `<img src="data:image/jpeg;base64,${i.fotoReposicao}" class="w-14 h-14 rounded-lg object-cover bg-black/30 border border-brand-border shrink-0" alt="Foto da reposição">`
+      : `<div class="w-14 h-14 rounded-lg bg-black/30 border border-dashed border-brand-border shrink-0 flex items-center justify-center text-slate-600 text-[9px] text-center">sem foto</div>`;
+    return `
+    <div class="bg-brand-card border border-emerald-500/30 rounded-xl p-3 flex items-center gap-2.5">
+      ${foto}
+      <div class="min-w-0 flex-1">
+        <div class="font-black text-sm">${esc(i.sku)}</div>
+        <div class="text-[11px] text-slate-400 truncate">${esc(i.descricao||'')}</div>
+        <div class="text-[10px] text-emerald-300 font-bold mt-0.5">${fmtQty(i.quantidadeReposta||0)} un. repostas</div>
+        <div class="text-[10px] text-slate-500">${esc(i.repostoPor||'--')} · ${i.repostoEm ? new Date(i.repostoEm).toLocaleString('pt-BR') : '--'}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+$('input-foto-repor').addEventListener('change', async e => {
+  const file = e.target.files[0];
+  e.target.value = '';
+  const id = state.pausarFotoAtual;
+  state.pausarFotoAtual = null;
+  if(!file || !id) return;
+  try {
+    const { base64 } = await comprimirImagem(file, 900, 0.65);
+    await db.ref(`${pathPausar()}/${id}`).update({ fotoReposicao: base64 });
+    toast('📷 Foto da reposição salva', 'ok');
+  } catch(err){
+    toast('Erro ao salvar foto: ' + (err.message||err), 'error');
+  }
+});
 
 /* =========================================================================
  * IMPORTAR PDF
