@@ -520,8 +520,9 @@ const GALPOES = ['Leopoldo', '21 de Abril', 'Cesário'];
 // a solução é comparar a versão atual com a última vista NESSE aparelho
 // (localStorage) — se mudou, mostra um modal com o que foi adicionado.
 // Pra lançar uma novidade: só bumpar APP_VERSAO e acrescentar um item aqui.
-const APP_VERSAO = '2026-09-14.1';
+const APP_VERSAO = '2026-09-14.2';
 const NOVIDADES_ATUAIS = [
+  'Botão "Enviar para a fila" agora mostra um spinner "Enviando..." e trava contra clique duplo, pra não enviar o mesmo PDF 2 vezes.',
   'Novo botão "↩️" (admin, pede PIN) pra devolver um item já separado ou em revisão de volta pra fila.',
   'Aba Anúncios: "Marcar como reposto" agora pede quantidade e foto, com histórico de repostos recentes.',
   'Filtro por dia na aba Pedidos (ERP) — dá pra ver quais pedidos entraram em cada data e o status de cada um.',
@@ -792,6 +793,27 @@ function toast(msg, type = 'info'){
 }
 
 function vibrate(ms){ try{ if(navigator.vibrate) navigator.vibrate(ms); }catch(_){} }
+
+// Trava um botão durante uma ação assíncrona (ex: enviar pra fila) — evita
+// clique duplo (o operador não sabe se já enviou e clica de novo) e mostra
+// um spinner + texto do que tá rolando. Guarda o HTML original a primeira
+// vez pra poder devolver exatamente como estava quando terminar.
+function setBotaoCarregando(btn, carregando, texto){
+  if(!btn) return;
+  if(carregando){
+    if(btn.dataset.htmlOriginal === undefined) btn.dataset.htmlOriginal = btn.innerHTML;
+    btn.disabled = true;
+    btn.classList.add('opacity-60', 'pointer-events-none');
+    btn.innerHTML = `<span class="inline-flex items-center justify-center gap-2">
+      <span class="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"></span>
+      <span>${esc(texto || 'Enviando...')}</span>
+    </span>`;
+  } else {
+    btn.disabled = false;
+    btn.classList.remove('opacity-60', 'pointer-events-none');
+    if(btn.dataset.htmlOriginal !== undefined) btn.innerHTML = btn.dataset.htmlOriginal;
+  }
+}
 
 /* =========================================================================
  * FIREBASE
@@ -2786,8 +2808,13 @@ $('btn-cancelar-import-erp').addEventListener('click', () => {
 });
 
 $('btn-confirmar-import-erp').addEventListener('click', async () => {
+  const btn = $('btn-confirmar-import-erp');
+  if(btn.disabled) return; // trava contra clique duplo enquanto já está enviando
   const pedidos = state.erpPedidosSelecionados || [];
   if(!pedidos.length){ toast('Nenhum pedido selecionado', 'warn'); return; }
+
+  setBotaoCarregando(btn, true, 'Enviando...');
+  try {
 
   // Localização/foto — mesma memória (Picking) e Controle de Estoque que o MKT usa.
   let estoqueInfo = {};
@@ -2910,12 +2937,20 @@ $('btn-confirmar-import-erp').addEventListener('click', async () => {
     });
   });
 
+  const totalItens = Object.keys(updates).length;
+  $('pdf-erp-status').textContent = `Salvando ${pedidos.length} pedido(s) na fila...`;
+  setBotaoCarregando(btn, true, `Salvando ${totalItens} registro(s)...`);
   await db.ref().update(updates);
   toast(`${pedidos.length} pedido(s) processado(s)${unificados ? `, ${unificados} item(ns) unificado(s)` : ''}`, 'ok');
   state.erpPedidosSelecionados = [];
   $('pdf-erp-preview-wrap').classList.add('hidden');
   $('pdf-erp-status').textContent = '';
   switchTab('fila');
+  } catch(e){
+    toast('Erro ao enviar pedidos: ' + (e.message||e), 'error');
+  } finally {
+    setBotaoCarregando(btn, false);
+  }
 });
 
 /*
@@ -3141,9 +3176,14 @@ $('btn-cancelar-import').addEventListener('click', () => {
 });
 
 $('btn-confirmar-import').addEventListener('click', async () => {
+  const btn = $('btn-confirmar-import');
+  if(btn.disabled) return; // trava contra clique duplo enquanto já está enviando
   const rows = state.pdfRows.filter(r => String(r.sku).trim());
   if(!rows.length){ toast('Nenhum item válido para importar', 'warn'); return; }
   const identificacao = $('pdf-identificacao').value.trim();
+
+  setBotaoCarregando(btn, true, 'Enviando...');
+  try {
 
   const importRef = db.ref(pathPedidos()).push();
   const importId = importRef.key;
@@ -3244,6 +3284,7 @@ $('btn-confirmar-import').addEventListener('click', async () => {
       };
     }
   });
+  setBotaoCarregando(btn, true, `Salvando ${rows.length} item(ns)...`);
   await db.ref(pathFila()).update(updates);
 
   toast(`${rows.length} item(ns) processados${unificados ? `, ${unificados} unificado(s) com pedidos já pendentes` : ''}`, 'ok');
@@ -3254,6 +3295,11 @@ $('btn-confirmar-import').addEventListener('click', async () => {
   $('pdf-status').textContent = '';
   $('pdf-identificacao').value = '';
   switchTab('fila');
+  } catch(e){
+    toast('Erro ao enviar para a fila: ' + (e.message||e), 'error');
+  } finally {
+    setBotaoCarregando(btn, false);
+  }
 });
 
 // Depois que um item muda pra um status final (separado ou falta definitiva),
