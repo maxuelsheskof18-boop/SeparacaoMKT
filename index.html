@@ -412,6 +412,10 @@
       <div id="conf-pedidos-agrupados" class="hidden bg-sky-500/10 border border-sky-500/30 rounded-xl p-2 mt-2">
         <div class="text-[10px] text-sky-300 font-bold uppercase mb-1">🔗 Quantidade unificada de vários pedidos</div>
         <div id="conf-pedidos-lista" class="text-[11px] text-sky-100 space-y-0.5"></div>
+        <div class="mt-2">
+          <div class="text-[9px] text-sky-300 font-bold uppercase mb-1">Separar pra qual pedido?</div>
+          <select id="conf-pedido-alvo" class="w-full bg-black/30 border border-sky-500/40 rounded-lg px-2 py-2.5 text-xs font-bold outline-none text-sky-100"></select>
+        </div>
       </div>
     </div>
 
@@ -520,8 +524,9 @@ const GALPOES = ['Leopoldo', '21 de Abril', 'Cesário'];
 // a solução é comparar a versão atual com a última vista NESSE aparelho
 // (localStorage) — se mudou, mostra um modal com o que foi adicionado.
 // Pra lançar uma novidade: só bumpar APP_VERSAO e acrescentar um item aqui.
-const APP_VERSAO = '2026-09-14.2';
+const APP_VERSAO = '2026-09-28.1';
 const NOVIDADES_ATUAIS = [
+  'Item unificado de vários pedidos: agora dá pra separar só a quantidade de UM pedido específico (escolhendo ele na lista) em vez de precisar separar tudo de uma vez — o resto continua pendente na fila.',
   'Botão "Enviar para a fila" agora mostra um spinner "Enviando..." e trava contra clique duplo, pra não enviar o mesmo PDF 2 vezes.',
   'Novo botão "↩️" (admin, pede PIN) pra devolver um item já separado ou em revisão de volta pra fila.',
   'Aba Anúncios: "Marcar como reposto" agora pede quantidade e foto, com histórico de repostos recentes.',
@@ -1324,15 +1329,24 @@ function openConfirmModal(item){
 
   const grupoEl = $('conf-pedidos-agrupados');
   const pedidos = Array.isArray(item.pedidosAgrupados) ? item.pedidosAgrupados : [];
+  const qtdInput = $('conf-qtd');
+  qtdInput.readOnly = false;
+  qtdInput.classList.remove('opacity-60');
   if(pedidos.length > 1){
     $('conf-pedidos-lista').innerHTML = pedidos.map(p => `<div>• ${esc(p.identificacao || 'Sem identificação')} — ${fmtQty(p.quantidade)} un.</div>`).join('');
+    // Padrão: "Todos" (finaliza o item inteiro, igual sempre foi). Escolher
+    // um pedido específico deixa separar só a parte DELE, mantendo o resto
+    // pendente na fila — pra quando só uma parte do que tá unificado chegou.
+    $('conf-pedido-alvo').innerHTML = `<option value="__todos__">🔄 Todos os pedidos restantes (finaliza o item)</option>` +
+      pedidos.map((p, i) => `<option value="${i}">${esc(p.identificacao || 'Sem identificação')} — ${fmtQty(p.quantidade)} un.</option>`).join('');
+    $('conf-pedido-alvo').value = '__todos__';
     grupoEl.classList.remove('hidden');
   } else {
     grupoEl.classList.add('hidden');
   }
 
   $('conf-qtd-pedida').textContent = fmtQty(item.qtdPedida);
-  $('conf-qtd').value = fmtQty(Math.max(0, Number(item.qtdPedida||0) - Number(item.qtdSeparada||0)));
+  qtdInput.value = fmtQty(Math.max(0, Number(item.qtdPedida||0) - Number(item.qtdSeparada||0)));
 
   // Memória de localização: se esse SKU já foi separado antes, usa o último
   // galpão/local conhecido como ponto de partida (o operador pode corrigir).
@@ -1351,6 +1365,29 @@ $('btn-cancelar-confirmar').addEventListener('click', () => {
   state.itemAtual = null;
 });
 
+// Escolher um pedido específico trava a quantidade na quantidade EXATA
+// daquele pedido (evita separar um número que não bate com nenhum pedido e
+// deixar a matemática de "quanto sobrou pra quem" inconsistente). Voltar pra
+// "Todos" libera o campo de novo com o total restante.
+$('conf-pedido-alvo').addEventListener('change', () => {
+  const item = state.itemAtual;
+  if(!item) return;
+  const qtdInput = $('conf-qtd');
+  const val = $('conf-pedido-alvo').value;
+  if(val === '__todos__'){
+    qtdInput.value = fmtQty(Math.max(0, Number(item.qtdPedida||0) - Number(item.qtdSeparada||0)));
+    qtdInput.readOnly = false;
+    qtdInput.classList.remove('opacity-60');
+  } else {
+    const pedidos = Array.isArray(item.pedidosAgrupados) ? item.pedidosAgrupados : [];
+    const p = pedidos[Number(val)];
+    if(!p) return;
+    qtdInput.value = fmtQty(p.quantidade);
+    qtdInput.readOnly = true;
+    qtdInput.classList.add('opacity-60');
+  }
+});
+
 $('btn-confirmar-separacao').addEventListener('click', async () => {
   const item = state.itemAtual;
   if(!item || !state.operador) return;
@@ -1359,6 +1396,17 @@ $('btn-confirmar-separacao').addEventListener('click', async () => {
   const galpaoEscolhido = $('conf-galpao-select').value || GALPOES[0];
   if(qtd <= 0){ toast('Informe a quantidade separada', 'warn'); return; }
   if(!local){ toast('Informe o local físico', 'warn'); return; }
+
+  // Item unificado + um pedido específico escolhido (não "Todos"): separa só
+  // a parte DELE e mantém o resto pendente na fila, em vez do fluxo normal
+  // abaixo que finaliza o item inteiro de uma vez.
+  const pedidosGrupo = Array.isArray(item.pedidosAgrupados) ? item.pedidosAgrupados : [];
+  const grupoVisivel = !$('conf-pedidos-agrupados').classList.contains('hidden');
+  const alvoValor = grupoVisivel ? $('conf-pedido-alvo').value : '__todos__';
+  if(pedidosGrupo.length > 1 && alvoValor !== '__todos__'){
+    await confirmarSeparacaoParcial(item, pedidosGrupo, Number(alvoValor), local, galpaoEscolhido);
+    return;
+  }
 
   const ref = db.ref(`${pathFila()}/${item.id}`);
   try {
@@ -1420,6 +1468,124 @@ $('btn-confirmar-separacao').addEventListener('click', async () => {
   $('modal-confirmar').classList.add('hidden');
   state.itemAtual = null;
 });
+
+// Separação PARCIAL: o item ficou unificado de vários pedidos (ex: 26 un.
+// somando 4 pedidos) mas só a quantidade de UM deles chegou/foi encontrada
+// agora. Tira só esse pedido do grupo (debita a quantidade dele do total) e
+// deixa o resto pendente na fila — quando o último pedido do grupo for
+// separado dessa forma, aí sim o item fecha ('separado') igual sempre foi.
+async function confirmarSeparacaoParcial(item, pedidosGrupo, idx, local, galpaoEscolhido){
+  const pedidoAlvo = pedidosGrupo[idx];
+  if(!pedidoAlvo){ toast('Pedido inválido', 'error'); return; }
+
+  const ref = db.ref(`${pathFila()}/${item.id}`);
+  try {
+    const result = await ref.transaction(cur => {
+      if(!cur) return cur;
+      if(cur.status !== 'pendente' && cur.status !== 'revisao') return; // outro operador já mexeu
+
+      const listaAtual = Array.isArray(cur.pedidosAgrupados) ? cur.pedidosAgrupados : [];
+      // Reacha o pedido pelo importId (não pelo índice) — a transaction pode
+      // rodar de novo com dados mais frescos se outro operador mexeu junto.
+      const pos = listaAtual.findIndex(p => p.importId === pedidoAlvo.importId);
+      if(pos === -1) return; // esse pedido já não está mais nesse item
+
+      const restante = listaAtual.slice();
+      const [removido] = restante.splice(pos, 1);
+      const qtdRemovida = Number(removido.quantidade) || 0;
+
+      // O item guarda também um "importId" próprio (quem criou esse registro
+      // na fila, geralmente o primeiro pedido importado) — usado em outros
+      // lugares (contagem nos cards de "Pedidos recentes", checagem de
+      // conclusão). Se o pedido removido agora É esse dono original, precisa
+      // passar a dona pra outro pedido que ainda sobrou, senão esse pedido
+      // que acabou de ser concluído nunca vai aparecer como "✅ Concluída"
+      // (o item continuaria "pertencendo" a ele pra sempre).
+      if(cur.importId === removido.importId && restante.length){
+        cur.importId = restante[0].importId;
+      }
+
+      // Mesma regra de penalidade do fluxo normal: se estava em revisão e
+      // quem separa agora não foi quem marcou "não encontrado", é penalidade.
+      if(cur.status === 'revisao' && cur.revisaoOperador1 && cur.revisaoOperador1 !== state.operador.nome){
+        cur.penalidadeAplicada = true;
+        cur.penalidadeOperador = cur.revisaoOperador1;
+        cur.penalidadeMotivo = 'Marcou "Não Encontrado", mas outro operador localizou o item depois.';
+        cur.penalidadeEncontradoPor = state.operador.nome;
+        cur.penalidadeTs = nowTs();
+      }
+
+      cur.pedidosAgrupados = restante;
+      cur.qtdPedida = Math.max(0, Number(cur.qtdPedida||0) - qtdRemovida);
+      cur.qtdSeparada = Number(cur.qtdSeparada||0) + qtdRemovida;
+      cur.atualizadoEm = nowTs();
+
+      // Histórico de cada pedaço separado — dá crédito de produtividade pro
+      // operador de CADA pedaço (não só de quem fechar o último) e registra
+      // exatamente quem separou a parte de qual pedido, quando e onde achou.
+      const historico = Array.isArray(cur.separacoesParciais) ? cur.separacoesParciais.slice() : [];
+      historico.push({
+        importId: removido.importId || '',
+        identificacao: removido.identificacao || '',
+        quantidade: qtdRemovida,
+        operador: state.operador.nome,
+        localFisico: local,
+        galpao: galpaoEscolhido,
+        dataHora: nowTs()
+      });
+      cur.separacoesParciais = historico;
+
+      if(restante.length === 0){
+        // Era o último pedido pendente desse grupo — fecha o item, igual ao
+        // fluxo normal de separação completa.
+        cur.status = 'separado';
+        cur.localFisico = local;
+        cur.galpao = galpaoEscolhido;
+        cur.operadorSeparou = state.operador.nome;
+        cur.dataHoraSeparado = nowTs();
+      } else {
+        // Ainda sobra pedido(s) — volta (ou mantém) pendente na fila, já sem
+        // marca de revisão (o produto acabou de ser encontrado/separado).
+        cur.status = 'pendente';
+        cur.revisaoMotivo = null;
+        cur.revisaoOperador1 = null;
+        cur.revisaoTs1 = null;
+      }
+      cur.emSeparacaoPor = null;
+      cur.emSeparacaoDesde = null;
+      if(cur.buscaIniciadaEm){
+        cur.tempoBuscaMs = Math.max(0, nowTs() - cur.buscaIniciadaEm);
+        cur.buscaIniciadaEm = null;
+        cur.buscaIniciadaPor = null;
+      }
+      return cur;
+    });
+
+    if(!result.committed){
+      toast('Esse pedido já foi separado por outro operador — abra o item de novo.', 'warn');
+      return;
+    }
+
+    await db.ref(`${PATH_LOCAL}/${skuKey(item.sku)}`).set({
+      sku: item.sku, localFisico: local, galpao: galpaoEscolhido,
+      atualizadoEm: nowTs(), atualizadoPor: state.operador.nome
+    });
+
+    const salvo = result.snapshot.val() || {};
+    if(salvo.status === 'separado'){
+      toast(`✔ ${item.sku} separado — era o último pedido pendente desse item`, 'ok');
+    } else {
+      const restanteQtd = fmtQty(salvo.qtdPedida || 0);
+      toast(`✔ ${fmtQty(pedidoAlvo.quantidade)} un. separadas p/ ${pedidoAlvo.identificacao || 'esse pedido'} — restam ${restanteQtd} un. dos outros pedidos`, 'ok');
+    }
+    vibrate(90);
+    verificarConclusaoImportacoes(Object.assign({ id: item.id }, salvo), [pedidoAlvo.importId]).catch(()=>{});
+  } catch(e){
+    toast('Erro ao salvar: ' + (e.message||e), 'error');
+  }
+  $('modal-confirmar').classList.add('hidden');
+  state.itemAtual = null;
+}
 
 document.querySelectorAll('.btn-nao-encontrado').forEach(btn => {
   btn.addEventListener('click', async () => {
@@ -1555,7 +1721,20 @@ function computeProdutividade(){
   const get = nome => (porOperador[nome] = porOperador[nome] || { nome, pacotes: 0, penalidades: 0, pedidos: new Set() });
 
   arr.forEach(i => {
-    if(i.status === 'separado' && i.operadorSeparou && itemNoPeriodo(i.dataHoraSeparado)){
+    const parciais = Array.isArray(i.separacoesParciais) ? i.separacoesParciais : [];
+    if(parciais.length){
+      // Item passou pela separação parcial (por pedido) — cada pedaço já
+      // registra seu próprio operador/pedido/data, então o crédito vem
+      // daqui, um por pedaço. Isso também cobre o pedaço que fechou o item
+      // (o último), então NÃO soma de novo pelo caminho de baixo — senão
+      // aquele último pedaço contaria em dobro.
+      parciais.forEach(p => {
+        if(!p.operador || !itemNoPeriodo(p.dataHora)) return;
+        const op = get(p.operador);
+        op.pacotes++;
+        op.pedidos.add((p.identificacao || 'Sem identificação').trim());
+      });
+    } else if(i.status === 'separado' && i.operadorSeparou && itemNoPeriodo(i.dataHoraSeparado)){
       const op = get(i.operadorSeparou);
       op.pacotes++;
       identificacoesDoItemCliente(i).forEach(id => op.pedidos.add(id));
@@ -1581,6 +1760,18 @@ function computeResumoGeral(){
 
   let itensHoje = 0, itensMes = 0;
   itemsArray().forEach(i => {
+    // Mesmo critério do computeProdutividade: item com separação parcial
+    // conta cada pedaço (já cobre o pedaço final que fecha o item), não o
+    // item inteiro de novo — senão contaria em dobro.
+    const parciais = Array.isArray(i.separacoesParciais) ? i.separacoesParciais : [];
+    if(parciais.length){
+      parciais.forEach(p => {
+        if(!p.dataHora) return;
+        if(hoje(p.dataHora)) itensHoje++;
+        if(mesmoMes(p.dataHora)) itensMes++;
+      });
+      return;
+    }
     if(i.status !== 'separado' || !i.dataHoraSeparado) return;
     if(hoje(i.dataHoraSeparado)) itensHoje++;
     if(mesmoMes(i.dataHoraSeparado)) itensMes++;
@@ -3310,12 +3501,19 @@ $('btn-confirmar-import').addEventListener('click', async () => {
 // tempo aquela lista levou pra ser separada por completo. "Falta definitiva"
 // também conta como final: um item confirmado como faltante por dois
 // operadores já foi totalmente resolvido, só não com sucesso.
-async function verificarConclusaoImportacoes(itemAtualizado){
+// extraImportIds: pedidos a também checar mesmo que já não apareçam mais em
+// itemAtualizado.pedidosAgrupados — necessário pra separação parcial, onde o
+// pedido que acabou de ser concluído já foi REMOVIDO do grupo do item antes
+// de chegar aqui (senão essa checagem nunca ia saber que ele existiu).
+async function verificarConclusaoImportacoes(itemAtualizado, extraImportIds){
   if(!itemAtualizado) return;
   const importIds = new Set();
   if(itemAtualizado.importId) importIds.add(itemAtualizado.importId);
   if(Array.isArray(itemAtualizado.pedidosAgrupados)){
     itemAtualizado.pedidosAgrupados.forEach(p => { if(p.importId) importIds.add(p.importId); });
+  }
+  if(Array.isArray(extraImportIds)){
+    extraImportIds.forEach(id => { if(id) importIds.add(id); });
   }
   if(!importIds.size) return;
 
@@ -3332,7 +3530,11 @@ async function verificarConclusaoImportacoes(itemAtualizado){
       i.importId === importId ||
       (Array.isArray(i.pedidosAgrupados) && i.pedidosAgrupados.some(p => p.importId === importId))
     );
-    if(!relacionados.length) continue;
+    // Lista vazia conta como "tudo finalizado" (every() em array vazio dá
+    // true) — acontece de propósito na separação parcial: o pedido que
+    // acabou de ser concluído já foi removido do pedidosAgrupados de todos
+    // os itens que o atendiam, então "nenhum item relacionado" = nada mais
+    // pendente pra ele.
     const todosFinalizados = relacionados.every(i => i.status === 'separado' || i.status === 'falta_definitiva');
     if(!todosFinalizados) continue;
 
