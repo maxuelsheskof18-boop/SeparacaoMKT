@@ -82,6 +82,7 @@
     <select id="sel-galpao" class="mt-2 w-full bg-brand-card border border-brand-border rounded-xl px-3 py-2.5 text-sm font-bold outline-none">
       <option value="todos">Todos os galpões</option>
     </select>
+    <div id="aviso-galpao" class="mt-1.5 text-[10px] text-slate-500 text-center"></div>
   </div>
 
   <!-- Tabs -->
@@ -524,8 +525,9 @@ const GALPOES = ['Leopoldo', '21 de Abril', 'Cesário'];
 // a solução é comparar a versão atual com a última vista NESSE aparelho
 // (localStorage) — se mudou, mostra um modal com o que foi adicionado.
 // Pra lançar uma novidade: só bumpar APP_VERSAO e acrescentar um item aqui.
-const APP_VERSAO = '2026-09-28.1';
+const APP_VERSAO = '2026-10-02.1';
 const NOVIDADES_ATUAIS = [
+  'Cada separador agora vê só o que está no galpão (ponto) dele: o galpão escolhido em "Operador" vira o filtro, os contadores seguem o filtro e cada item mostra em destaque onde está (📍 galpão · local). Pra ver outro galpão, troque no seletor do topo.',
   'Item unificado de vários pedidos: agora dá pra separar só a quantidade de UM pedido específico (escolhendo ele na lista) em vez de precisar separar tudo de uma vez — o resto continua pendente na fila.',
   'Botão "Enviar para a fila" agora mostra um spinner "Enviando..." e trava contra clique duplo, pra não enviar o mesmo PDF 2 vezes.',
   'Novo botão "↩️" (admin, pede PIN) pra devolver um item já separado ou em revisão de volta pra fila.',
@@ -669,7 +671,7 @@ const state = {
 
   localizacoes: {},  // skuKey -> { sku, localFisico, galpao, atualizadoEm, atualizadoPor } — compartilhado entre os módulos
   operador: JSON.parse(safeGet('local', 'picking_operador') || 'null'),
-  galpaoFiltro: safeGet('local', 'picking_galpao_filtro') || 'todos',
+  galpaoFiltro: safeGet('local', 'picking_galpao_filtro') || 'todos', // ajustado logo abaixo pelo galpão do operador, se ele nunca escolheu um filtro
   pdfRows: [],
   pdfFileName: '',
   pdfFileHash: '',
@@ -683,6 +685,12 @@ const state = {
   lastScan: { code: '', at: 0 },
   prevFilaSnapshot: {}
 };
+
+// Quem nunca escolheu um filtro de galpão manualmente começa vendo só o
+// galpão (ponto) do próprio operador — não o "Todos".
+if(!safeGet('local', 'picking_galpao_filtro') && state.operador && GALPOES.includes(state.operador.galpao)){
+  state.galpaoFiltro = state.operador.galpao;
+}
 
 function uid(){ return 'op_' + Math.random().toString(36).slice(2, 9); }
 function nowTs(){ return Date.now(); }
@@ -908,7 +916,13 @@ function ensureOperador(){
   $('modal-operador').classList.remove('hidden');
 }
 
-$('btn-operador').addEventListener('click', () => $('modal-operador').classList.remove('hidden'));
+$('btn-operador').addEventListener('click', () => {
+  if(state.operador){
+    $('input-operador-nome').value = state.operador.nome || '';
+    if(state.operador.galpao) $('input-operador-galpao').value = state.operador.galpao;
+  }
+  $('modal-operador').classList.remove('hidden');
+});
 
 $('btn-salvar-operador').addEventListener('click', () => {
   const nome = $('input-operador-nome').value.trim();
@@ -918,13 +932,19 @@ $('btn-salvar-operador').addEventListener('click', () => {
   safeSet('local', 'picking_operador', JSON.stringify(state.operador));
   $('operador-nome').textContent = nome;
   $('modal-operador').classList.add('hidden');
-  toast(`Bem-vindo, ${nome}!`, 'ok');
+  // O ponto (galpão) de quem opera vira o filtro: só vê o que está no seu
+  // ponto. Quem precisar ver outro (ex: supervisor) troca no seletor.
+  state.galpaoFiltro = galpao;
+  $('sel-galpao').value = galpao;
+  safeSet('local', 'picking_galpao_filtro', galpao);
+  renderAll();
+  toast(`Bem-vindo, ${nome}! Separando só o que está em ${galpao}.`, 'ok');
 });
 
 $('sel-galpao').addEventListener('change', e => {
   state.galpaoFiltro = e.target.value;
   safeSet('local', 'picking_galpao_filtro', state.galpaoFiltro);
-  renderFila();
+  renderAll();
 });
 
 /* =========================================================================
@@ -1034,12 +1054,25 @@ function renderAll(){
 }
 
 function renderKpis(){
-  const arr = itemsArray();
+  const todos = itemsArray();
+  // Contadores seguem o galpão escolhido — senão o separador veria "22
+  // pendentes" e só 8 na lista (os outros são do ponto de outra pessoa).
+  const arr = todos.filter(passaGalpao);
   $('kpi-pendentes').textContent = arr.filter(i => i.status === 'pendente').length;
   const revisao = arr.filter(i => i.status === 'revisao').length;
   $('kpi-revisao').textContent = revisao;
   $('kpi-separados').textContent = arr.filter(i => i.status === 'separado').length;
   $('kpi-faltando').textContent = arr.filter(i => i.status === 'falta_definitiva').length;
+
+  const aviso = $('aviso-galpao');
+  if(state.galpaoFiltro === 'todos'){
+    aviso.textContent = 'Mostrando todos os galpões — escolha o seu pra ver só o que está no seu ponto.';
+    aviso.className = 'mt-1.5 text-[10px] text-slate-500 text-center';
+  } else {
+    const outros = todos.filter(i => (i.status === 'pendente' || i.status === 'revisao') && !passaGalpao(i)).length;
+    aviso.textContent = `📍 Separando só o que está em ${state.galpaoFiltro}` + (outros ? ` · ${outros} item(ns) em outros galpões (não são do seu ponto)` : '');
+    aviso.className = 'mt-1.5 text-[10px] text-sky-300 font-bold text-center';
+  }
   const badge = $('badge-revisao');
   if(revisao > 0){ badge.textContent = revisao; badge.classList.remove('hidden'); }
   else badge.classList.add('hidden');
@@ -1074,6 +1107,9 @@ function itemCardHtml(item){
   }[item.status] || '';
 
   const origem = item.localizacaoOrigem ? `<span class="text-orange-300">📍 ${esc(item.localizacaoOrigem)}</span> · ` : '';
+  // Onde o produto está: galpão (+ local sugerido, se já se sabe) em destaque,
+  // pra o separador ver de cara que é do ponto dele.
+  const ondeEsta = `<span class="tag-pill bg-sky-500/15 text-sky-300 border border-sky-500/30">📍 ${esc(item.galpao || 'Sem galpão')}${item.localFisicoSugerido ? ' · ' + esc(item.localFisicoSugerido) : ''}</span>`;
   const foto = item.foto ? `<img src="${esc(item.foto)}" class="w-11 h-11 rounded-lg object-cover bg-black/30 border border-brand-border shrink-0" alt="">` : '';
   const nPedidos = Array.isArray(item.pedidosAgrupados) ? item.pedidosAgrupados.length : 1;
   const grupo = nPedidos > 1 ? `<span class="tag-pill bg-sky-500/15 text-sky-300 border border-sky-500/30">🔗 ${nPedidos} pedidos</span>` : '';
@@ -1125,6 +1161,7 @@ function itemCardHtml(item){
           <div class="flex items-center gap-1.5 flex-wrap">
             <span class="font-black text-sm">${esc(item.sku)}</span>
             ${statusTag}
+            ${ondeEsta}
             ${prioridadeTag}
             ${grupo}
             ${lock}
@@ -1265,6 +1302,15 @@ function handleScannedCode(raw){
   );
 
   if(matches.length === 0){
+    // Existe, mas em outro galpão? Avisa onde está pra o operador não achar
+    // que o código é inválido (nem sair procurando fora do ponto dele).
+    const noutroGalpao = itemsArray().filter(i => itemMatchesCode(i, code) && (i.status === 'pendente' || i.status === 'revisao'));
+    if(noutroGalpao.length){
+      const onde = [...new Set(noutroGalpao.map(i => i.galpao || '--'))].join(', ');
+      toast(`Esse produto está em ${onde} — não é do seu ponto (${state.galpaoFiltro}).`, 'warn');
+      vibrate([40,60,40]);
+      return;
+    }
     toast(`Código "${code}" não está na fila de separação${state.galpaoFiltro!=='todos' ? ' (' + state.galpaoFiltro + ')' : ''}.`, 'error');
     vibrate([40,60,40]);
     return;
