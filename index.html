@@ -410,6 +410,8 @@
         <span id="conf-status-tag" class="tag-pill hidden bg-yellow-500/10 text-yellow-300 border border-yellow-500/30">Em revisão</span>
       </div>
       <div id="conf-estoque-locais" class="hidden text-[10px] text-emerald-300 mt-1">🏭 Estoque informou: --</div>
+      <div id="conf-onde-informado" class="hidden bg-emerald-500/10 border border-emerald-500/40 rounded-xl p-2 mt-2 text-[11px] text-emerald-200 font-bold"></div>
+      <button id="btn-conf-informar-local" class="mt-2 w-full min-h-[36px] rounded-xl bg-brand-card2 border border-brand-border text-[11px] font-black text-slate-300">📍 Informar onde está o produto (supervisor)</button>
       <div id="conf-pedidos-agrupados" class="hidden bg-sky-500/10 border border-sky-500/30 rounded-xl p-2 mt-2">
         <div class="text-[10px] text-sky-300 font-bold uppercase mb-1">🔗 Quantidade unificada de vários pedidos</div>
         <div id="conf-pedidos-lista" class="text-[11px] text-sky-100 space-y-0.5"></div>
@@ -463,6 +465,34 @@
     <div class="font-black text-sm mb-1">Esse código aparece em mais de um item — escolha qual:</div>
     <div id="lista-escolher"></div>
     <button id="btn-cancelar-escolher" class="w-full min-h-[42px] rounded-xl bg-transparent border border-brand-border font-bold text-xs text-slate-400 mt-1">Cancelar</button>
+  </div>
+</div>
+
+<!-- ===================== MODAL: INFORMAR ONDE ESTÁ O PRODUTO (supervisor) ===================== -->
+<div id="modal-onde-esta" class="hidden fixed inset-0 z-[92] bg-black/85 flex items-end sm:items-center justify-center p-2">
+  <div class="modal-card w-full max-w-md bg-brand-card border border-brand-border rounded-2xl p-4 space-y-3 max-h-[92vh] overflow-y-auto">
+    <div>
+      <div class="text-[10px] text-slate-500 font-bold uppercase">Onde está o produto?</div>
+      <div id="onde-sku" class="text-lg font-black">--</div>
+      <div id="onde-descricao" class="text-xs text-slate-400 mt-0.5">--</div>
+      <div class="text-[10px] text-slate-500 mt-1">O item passa a aparecer pro separador do galpão escolhido, já com o local indicado.</div>
+    </div>
+    <div>
+      <div class="text-[10px] text-slate-500 font-bold uppercase mb-1">Galpão</div>
+      <select id="onde-galpao" class="w-full bg-black/40 border border-brand-border rounded-xl px-3 py-3 font-bold outline-none"></select>
+    </div>
+    <div>
+      <div class="text-[10px] text-slate-500 font-bold uppercase mb-1">Local (corredor / prateleira)</div>
+      <input id="onde-local" placeholder="Ex: A1-03" class="w-full bg-black/40 border border-brand-border rounded-xl px-3 py-3 font-bold outline-none">
+    </div>
+    <div>
+      <div class="text-[10px] text-slate-500 font-bold uppercase mb-1">Observação pro separador (opcional)</div>
+      <input id="onde-obs" placeholder="Ex: caixa fechada atrás do palete" class="w-full bg-black/40 border border-brand-border rounded-xl px-3 py-3 outline-none">
+    </div>
+    <div class="grid grid-cols-1 gap-2 pt-1">
+      <button id="btn-onde-salvar" class="min-h-[48px] rounded-xl bg-brand-green text-black font-black text-sm">✔ Informar local</button>
+      <button id="btn-onde-cancelar" class="min-h-[42px] rounded-xl bg-transparent border border-brand-border font-bold text-xs text-slate-400">Cancelar</button>
+    </div>
   </div>
 </div>
 
@@ -525,8 +555,9 @@ const GALPOES = ['Leopoldo', '21 de Abril', 'Cesário'];
 // a solução é comparar a versão atual com a última vista NESSE aparelho
 // (localStorage) — se mudou, mostra um modal com o que foi adicionado.
 // Pra lançar uma novidade: só bumpar APP_VERSAO e acrescentar um item aqui.
-const APP_VERSAO = '2026-10-02.1';
+const APP_VERSAO = '2026-10-02.2';
 const NOVIDADES_ATUAIS = [
+  'Novo botão "📌" (supervisor, pede PIN) em cada item: informa o galpão e o local onde o produto está. O item passa a aparecer pro separador daquele galpão, com o local indicado em verde (e a observação, se tiver) — também dá pra informar de dentro da tela de confirmação.',
   'Cada separador agora vê só o que está no galpão (ponto) dele: o galpão escolhido em "Operador" vira o filtro, os contadores seguem o filtro e cada item mostra em destaque onde está (📍 galpão · local). Pra ver outro galpão, troque no seletor do topo.',
   'Item unificado de vários pedidos: agora dá pra separar só a quantidade de UM pedido específico (escolhendo ele na lista) em vez de precisar separar tudo de uma vez — o resto continua pendente na fila.',
   'Botão "Enviar para a fila" agora mostra um spinner "Enviando..." e trava contra clique duplo, pra não enviar o mesmo PDF 2 vezes.',
@@ -906,6 +937,9 @@ function fillGalpaoSelects(){
 
   const selConf = $('conf-galpao-select');
   GALPOES.forEach(g => { const o=document.createElement('option'); o.value=g; o.textContent=g; selConf.appendChild(o); });
+
+  const selOnde = $('onde-galpao');
+  GALPOES.forEach(g => { const o=document.createElement('option'); o.value=g; o.textContent=g; selOnde.appendChild(o); });
 }
 
 function ensureOperador(){
@@ -1109,7 +1143,11 @@ function itemCardHtml(item){
   const origem = item.localizacaoOrigem ? `<span class="text-orange-300">📍 ${esc(item.localizacaoOrigem)}</span> · ` : '';
   // Onde o produto está: galpão (+ local sugerido, se já se sabe) em destaque,
   // pra o separador ver de cara que é do ponto dele.
-  const ondeEsta = `<span class="tag-pill bg-sky-500/15 text-sky-300 border border-sky-500/30">📍 ${esc(item.galpao || 'Sem galpão')}${item.localFisicoSugerido ? ' · ' + esc(item.localFisicoSugerido) : ''}</span>`;
+  // Se o supervisor informou o local, o selo fica verde (é certeza, não palpite).
+  const ondeEsta = item.localInformadoPor
+    ? `<span class="tag-pill bg-emerald-500/15 text-emerald-300 border border-emerald-500/40" title="Informado por ${esc(item.localInformadoPor)}">✅ ${esc(item.galpao || 'Sem galpão')}${item.localFisicoSugerido ? ' · ' + esc(item.localFisicoSugerido) : ''}</span>`
+    : `<span class="tag-pill bg-sky-500/15 text-sky-300 border border-sky-500/30">📍 ${esc(item.galpao || 'Sem galpão')}${item.localFisicoSugerido ? ' · ' + esc(item.localFisicoSugerido) : ''}</span>`;
+  const btnInformarLocal = `<button class="btn-informar-local-item shrink-0 min-h-[40px] px-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 font-black text-xs" title="Supervisor: informar onde o produto está">📌</button>`;
   const foto = item.foto ? `<img src="${esc(item.foto)}" class="w-11 h-11 rounded-lg object-cover bg-black/30 border border-brand-border shrink-0" alt="">` : '';
   const nPedidos = Array.isArray(item.pedidosAgrupados) ? item.pedidosAgrupados.length : 1;
   const grupo = nPedidos > 1 ? `<span class="tag-pill bg-sky-500/15 text-sky-300 border border-sky-500/30">🔗 ${nPedidos} pedidos</span>` : '';
@@ -1170,10 +1208,12 @@ function itemCardHtml(item){
           </div>
           <div class="text-[11px] text-slate-400 truncate">${esc(item.descricao||'')}</div>
           <div class="text-[10px] text-slate-500 mt-0.5">${origem}${esc(item.identificacao||'Sem identificação')} · ${esc(item.galpao||'--')} · Qtd ${fmtQty(item.qtdPedida)}</div>
+          ${item.localInformadoObs ? `<div class="text-[10px] text-emerald-300 mt-0.5">💬 ${esc(item.localInformadoObs)}</div>` : ''}
           ${item.status === 'revisao' && item.revisaoMotivo ? `<div class="text-[10px] text-yellow-300 mt-0.5">⚠ ${esc(item.revisaoMotivo)} (${esc(item.revisaoOperador1||'--')})</div>` : ''}
         </div>
       </div>
       <div class="flex items-center gap-1.5 shrink-0">
+        ${btnInformarLocal}
         ${btnEstoqueBaixo}
         ${btnReverterAdmin}
         ${btnBuscar}
@@ -1270,7 +1310,106 @@ function bindOpenButtons(box){
       reverterItemParaFila(id);
     });
   });
+  box.querySelectorAll('.btn-informar-local-item').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.closest('[data-item-id]').dataset.itemId;
+      abrirInformarLocal(id);
+    });
+  });
 }
+
+/* =========================================================================
+ * SUPERVISOR: INFORMAR ONDE ESTÁ O PRODUTO
+ * O supervisor sabe onde o produto está (ex: o saco plástico) e avisa pro
+ * separador ir procurar no lugar certo. Muda o galpão do item — então ele
+ * passa a aparecer pro separador daquele ponto — e deixa o local indicado.
+ * =======================================================================*/
+
+function abrirInformarLocal(itemId){
+  const item = state.fila[itemId];
+  if(!item) return;
+  if(!pedirPinAdmin()) return;
+  state.localItemId = itemId;
+  $('onde-sku').textContent = item.sku;
+  $('onde-descricao').textContent = item.descricao || '';
+  $('onde-galpao').value = item.galpao || GALPOES[0];
+  $('onde-local').value = item.localFisicoSugerido || '';
+  $('onde-obs').value = item.localInformadoObs || '';
+  $('modal-onde-esta').classList.remove('hidden');
+}
+
+$('btn-onde-cancelar').addEventListener('click', () => {
+  $('modal-onde-esta').classList.add('hidden');
+  state.localItemId = null;
+});
+
+$('btn-onde-salvar').addEventListener('click', async () => {
+  const id = state.localItemId;
+  if(!id) return;
+  const galpao = $('onde-galpao').value;
+  const local = $('onde-local').value.trim();
+  const obs = $('onde-obs').value.trim();
+  if(!local){ toast('Informe o local do produto', 'warn'); return; }
+  const quem = state.operador ? state.operador.nome : 'supervisor';
+  const btn = $('btn-onde-salvar');
+  setBotaoCarregando(btn, true, 'Salvando...');
+  try {
+    const item = state.fila[id];
+    const result = await db.ref(`${pathFila()}/${id}`).transaction(cur => {
+      if(!cur) return cur;
+      if(cur.status !== 'pendente' && cur.status !== 'revisao') return; // já foi separado/encerrado
+      cur.galpao = galpao;
+      cur.localFisicoSugerido = local;
+      cur.localInformadoPor = quem;
+      cur.localInformadoEm = nowTs();
+      cur.localInformadoObs = obs || null;
+      cur.atualizadoEm = nowTs();
+      return cur;
+    });
+    if(!result.committed){
+      toast('Esse item já foi separado — nada a informar.', 'warn');
+    } else {
+      // Memória de localização: a próxima importação desse SKU já sugere esse local.
+      if(item){
+        await db.ref(`${PATH_LOCAL}/${skuKey(item.sku)}`).set({
+          sku: item.sku, localFisico: local, galpao,
+          atualizadoEm: nowTs(), atualizadoPor: quem
+        });
+      }
+      toast(`📌 ${item ? item.sku : 'Item'}: ${galpao} · ${local} — o separador de ${galpao} já vê`, 'ok');
+      // Se foi aberto de dentro da tela de confirmação, atualiza ela na hora.
+      if(state.itemAtual && state.itemAtual.id === id){
+        state.itemAtual = Object.assign({}, state.itemAtual, result.snapshot.val() || {}, { id });
+        preencherInfoLocalConfirmacao(state.itemAtual);
+      }
+    }
+  } catch(e){
+    toast('Erro ao salvar: ' + (e.message||e), 'error');
+  } finally {
+    setBotaoCarregando(btn, false);
+    $('modal-onde-esta').classList.add('hidden');
+    state.localItemId = null;
+  }
+});
+
+// Mostra/atualiza na tela de confirmação o que o supervisor informou (e
+// já preenche galpão/local com isso — o separador só confere e vai buscar).
+function preencherInfoLocalConfirmacao(item){
+  const box = $('conf-onde-informado');
+  if(item.localInformadoPor){
+    box.innerHTML = `📌 ${esc(item.localInformadoPor)} informou: <b>${esc(item.galpao || '--')}${item.localFisicoSugerido ? ' · ' + esc(item.localFisicoSugerido) : ''}</b>${item.localInformadoObs ? `<div class="font-normal mt-0.5">💬 ${esc(item.localInformadoObs)}</div>` : ''}`;
+    box.classList.remove('hidden');
+    $('conf-galpao-select').value = item.galpao || GALPOES[0];
+    $('conf-local').value = item.localFisicoSugerido || '';
+    $('conf-local-sugerido').classList.add('hidden');
+  } else {
+    box.classList.add('hidden');
+  }
+}
+
+$('btn-conf-informar-local').addEventListener('click', () => {
+  if(state.itemAtual) abrirInformarLocal(state.itemAtual.id);
+});
 
 /* =========================================================================
  * BUSCA / BIPAGEM MANUAL
@@ -1401,6 +1540,7 @@ function openConfirmModal(item){
   const localPreenchido = item.localFisico || item.localFisicoSugerido || (memoria && memoria.localFisico) || '';
   $('conf-local').value = localPreenchido;
   $('conf-local-sugerido').classList.toggle('hidden', !localPreenchido || !!item.localFisico);
+  preencherInfoLocalConfirmacao(item);
 
   $('modal-confirmar').classList.remove('hidden');
 }
