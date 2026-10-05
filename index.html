@@ -124,6 +124,13 @@
         <div class="text-[10px] text-slate-500">Pedidos de venda (atacado) — por pedido</div>
       </div>
     </button>
+    <button id="btn-admin-operadores" class="w-full text-left rounded-xl border border-brand-border bg-brand-card p-3 flex items-center gap-3">
+      <span class="text-2xl">🔑</span>
+      <div>
+        <div class="font-black text-sm">Operadores e senhas</div>
+        <div class="text-[10px] text-slate-500">Somente administrador (PIN)</div>
+      </div>
+    </button>
   </div>
   <div class="p-3 border-t border-brand-border">
     <button id="btn-fechar-menu" class="w-full min-h-[42px] rounded-xl bg-transparent border border-brand-border font-bold text-xs text-slate-400">Fechar</button>
@@ -363,9 +370,13 @@
 <div id="modal-operador" class="hidden fixed inset-0 z-[80] bg-black/85 flex items-center justify-center p-4">
   <div class="modal-card bg-brand-card border border-brand-border rounded-2xl p-4 w-full max-w-sm space-y-3">
     <div class="font-black text-base">Quem está operando?</div>
-    <input id="input-operador-nome" placeholder="Seu nome" class="w-full bg-black/40 border border-brand-border rounded-xl px-3 py-3 outline-none font-bold">
+    <div id="operador-ajuda" class="text-[11px] text-slate-400">Digite seu nome e sua senha. Primeiro acesso? Escreva seu nome e crie uma senha.</div>
+    <input id="input-operador-nome" placeholder="Seu nome" autocomplete="off" class="w-full bg-black/40 border border-brand-border rounded-xl px-3 py-3 outline-none font-bold">
+    <input id="input-operador-senha" type="password" placeholder="Senha" autocomplete="off" class="w-full bg-black/40 border border-brand-border rounded-xl px-3 py-3 outline-none font-bold">
+    <input id="input-operador-senha2" type="password" placeholder="Confirme a senha (primeiro acesso)" autocomplete="off" class="hidden w-full bg-black/40 border border-brand-yellow/50 rounded-xl px-3 py-3 outline-none font-bold">
     <select id="input-operador-galpao" class="w-full bg-black/40 border border-brand-border rounded-xl px-3 py-3 outline-none font-bold"></select>
-    <button id="btn-salvar-operador" class="w-full min-h-[46px] rounded-xl bg-brand-orange text-black font-black">Começar a separar</button>
+    <button id="btn-salvar-operador" class="w-full min-h-[46px] rounded-xl bg-brand-orange text-black font-black">Entrar</button>
+    <button id="btn-cancelar-operador" class="hidden w-full min-h-[40px] rounded-xl bg-transparent border border-brand-border font-bold text-xs text-slate-400">Cancelar</button>
   </div>
 </div>
 
@@ -496,6 +507,25 @@
   </div>
 </div>
 
+<!-- ===================== MODAL: OPERADORES E SENHAS (admin) ===================== -->
+<div id="modal-operadores-admin" class="hidden fixed inset-0 z-[97] bg-black/85 flex items-end sm:items-center justify-center p-2">
+  <div class="modal-card w-full max-w-md bg-brand-card border border-brand-border rounded-2xl p-4 space-y-3 max-h-[92vh] overflow-y-auto">
+    <div class="flex items-center justify-between gap-2">
+      <div class="font-black text-base">🔑 Operadores e senhas</div>
+      <button id="btn-fechar-operadores-admin" class="text-[11px] font-black text-red-300 bg-red-500/10 border border-red-500/40 rounded-lg px-2.5 py-1.5">Fechar</button>
+    </div>
+    <div class="bg-black/20 border border-brand-border rounded-xl p-2.5 space-y-2">
+      <div class="text-[10px] text-slate-500 font-bold uppercase">Cadastrar operador / definir senha</div>
+      <input id="adm-op-nome" placeholder="Nome do operador" autocomplete="off" class="w-full bg-black/40 border border-brand-border rounded-xl px-3 py-2.5 text-sm font-bold outline-none">
+      <input id="adm-op-senha" placeholder="Senha (mín. 4 caracteres)" autocomplete="off" class="w-full bg-black/40 border border-brand-border rounded-xl px-3 py-2.5 text-sm font-bold outline-none">
+      <select id="adm-op-galpao" class="w-full bg-black/40 border border-brand-border rounded-xl px-3 py-2.5 text-sm font-bold outline-none"></select>
+      <button id="btn-adm-op-criar" class="w-full min-h-[42px] rounded-xl bg-brand-green text-black font-black text-sm">➕ Cadastrar</button>
+    </div>
+    <div id="adm-op-lista" class="space-y-2"></div>
+    <div class="text-[10px] text-slate-500 leading-relaxed">As senhas ficam guardadas criptografadas; só quem tem o PIN de administrador consegue ver. O operador também pode criar a própria senha no primeiro acesso.</div>
+  </div>
+</div>
+
 <!-- ===================== MODAL: NOVIDADES DO APP ===================== -->
 <div id="modal-novidades" class="hidden fixed inset-0 z-[95] bg-black/85 flex items-center justify-center p-4">
   <div class="modal-card w-full max-w-md bg-brand-card border border-brand-blue/50 rounded-2xl p-4 space-y-3 max-h-[85vh] overflow-y-auto">
@@ -555,8 +585,10 @@ const GALPOES = ['Leopoldo', '21 de Abril', 'Cesário'];
 // a solução é comparar a versão atual com a última vista NESSE aparelho
 // (localStorage) — se mudou, mostra um modal com o que foi adicionado.
 // Pra lançar uma novidade: só bumpar APP_VERSAO e acrescentar um item aqui.
-const APP_VERSAO = '2026-10-02.2';
+const APP_VERSAO = '2026-10-06.1';
 const NOVIDADES_ATUAIS = [
+  'Agora o acesso é com nome e SENHA. No primeiro acesso você cria a sua (digite seu nome, uma senha e confirme). Da próxima vez é só nome + senha. Quem esquecer a senha fala com o administrador.',
+  'Itens em revisão agora também aparecem na Fila, em vermelho (🚨 Revisão). Quando forem achados e separados, ficam com o marcador "🔁 Passou pela revisão" (passe o dedo/mouse pra ver quem não achou e quem achou).',
   'Novo botão "📌" (supervisor, pede PIN) em cada item: informa o galpão e o local onde o produto está. O item passa a aparecer pro separador daquele galpão, com o local indicado em verde (e a observação, se tiver) — também dá pra informar de dentro da tela de confirmação.',
   'Cada separador agora vê só o que está no galpão (ponto) dele: o galpão escolhido em "Operador" vira o filtro, os contadores seguem o filtro e cada item mostra em destaque onde está (📍 galpão · local). Pra ver outro galpão, troque no seletor do topo.',
   'Item unificado de vários pedidos: agora dá pra separar só a quantidade de UM pedido específico (escolhendo ele na lista) em vez de precisar separar tudo de uma vez — o resto continua pendente na fila.',
@@ -645,6 +677,7 @@ async function reverterItemParaFila(itemId){
       revisaoMotivo2: null,
       revisaoOperador2: null,
       revisaoTs2: null,
+      passouRevisao: null,
       sobra: null,
       sobraMotivo: null,
       sobraObs: null,
@@ -719,8 +752,13 @@ const state = {
 
 // Quem nunca escolheu um filtro de galpão manualmente começa vendo só o
 // galpão (ponto) do próprio operador — não o "Todos".
-if(!safeGet('local', 'picking_galpao_filtro') && state.operador && GALPOES.includes(state.operador.galpao)){
-  state.galpaoFiltro = state.operador.galpao;
+// Sessão sem senha (de antes do login com senha existir) não vale: guarda
+// só pra pré-preencher a tela de entrada e obriga a criar/digitar a senha.
+state.operadorSalvo = state.operador;
+if(state.operador && !state.operador.autenticado) state.operador = null;
+
+if(!safeGet('local', 'picking_galpao_filtro') && state.operadorSalvo && GALPOES.includes(state.operadorSalvo.galpao)){
+  state.galpaoFiltro = state.operadorSalvo.galpao;
 }
 
 function uid(){ return 'op_' + Math.random().toString(36).slice(2, 9); }
@@ -940,29 +978,93 @@ function fillGalpaoSelects(){
 
   const selOnde = $('onde-galpao');
   GALPOES.forEach(g => { const o=document.createElement('option'); o.value=g; o.textContent=g; selOnde.appendChild(o); });
+
+  const selAdm = $('adm-op-galpao');
+  GALPOES.forEach(g => { const o=document.createElement('option'); o.value=g; o.textContent=g; selAdm.appendChild(o); });
 }
 
 function ensureOperador(){
-  if(state.operador && state.operador.nome){
+  if(state.operador && state.operador.nome && state.operador.autenticado){
     $('operador-nome').textContent = state.operador.nome;
     return;
   }
+  abrirModalOperador();
+}
+
+/* =========================================================================
+ * LOGIN DO OPERADOR (nome + senha)
+ * Cadastro em ${ROOT_MKT}/operadores/{nome normalizado}: { nome, galpao,
+ * salt, hash, senhaCifrada }. A senha NUNCA fica em texto puro: o login
+ * confere o "hash" (PBKDF2 com sal próprio) e o admin lê a senha de
+ * "senhaCifrada" (AES-GCM com chave derivada do PIN de administrador).
+ * Atenção: o PIN está no código do app e o banco está aberto — isso afasta
+ * curiosos, mas não é segurança de verdade (ver aviso ao final do pedido).
+ * =======================================================================*/
+
+const PATH_OPERADORES = `${ROOT_MKT}/operadores`;
+const SENHA_MIN = 4;
+const TXT_ENC = new TextEncoder(), TXT_DEC = new TextDecoder();
+
+function nomeKey(n){
+  return String(n || '').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+}
+function b64(buf){ let s = ''; new Uint8Array(buf).forEach(b => { s += String.fromCharCode(b); }); return btoa(s); }
+function unb64(s){ return Uint8Array.from(atob(s), c => c.charCodeAt(0)); }
+function cryptoOk(){ return !!(window.crypto && window.crypto.subtle); }
+
+async function pbkdf2Bits(texto, salt, bits){
+  const k = await crypto.subtle.importKey('raw', TXT_ENC.encode(texto), 'PBKDF2', false, ['deriveBits']);
+  return crypto.subtle.deriveBits({ name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' }, k, bits);
+}
+async function hashSenha(senha, saltB64){ return b64(await pbkdf2Bits(senha, unb64(saltB64), 256)); }
+async function chaveAdmin(){
+  const bits = await pbkdf2Bits(SUPERVISOR_PIN, TXT_ENC.encode('vesco-picking-operadores-v1'), 256);
+  return crypto.subtle.importKey('raw', bits, 'AES-GCM', false, ['encrypt', 'decrypt']);
+}
+async function cifrarSenha(senha){
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, await chaveAdmin(), TXT_ENC.encode(senha)));
+  const out = new Uint8Array(12 + ct.length);
+  out.set(iv); out.set(ct, 12);
+  return b64(out);
+}
+async function decifrarSenha(s){
+  const all = unb64(s);
+  return TXT_DEC.decode(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: all.slice(0, 12) }, await chaveAdmin(), all.slice(12)));
+}
+
+// Monta o registro de credenciais (sal novo a cada vez que a senha muda).
+async function montarCredenciais(senha){
+  const salt = b64(crypto.getRandomValues(new Uint8Array(16)));
+  return { salt, hash: await hashSenha(senha, salt), senhaCifrada: await cifrarSenha(senha) };
+}
+
+function abrirModalOperador(){
+  const base = state.operador || state.operadorSalvo;
+  $('input-operador-nome').value = base ? (base.nome || '') : '';
+  $('input-operador-senha').value = '';
+  $('input-operador-senha2').value = '';
+  $('input-operador-senha2').classList.add('hidden');
+  if(base && base.galpao) $('input-operador-galpao').value = base.galpao;
+  $('operador-ajuda').textContent = (state.operadorSalvo && !state.operador)
+    ? 'Agora o acesso é com senha. Digite sua senha — se for o primeiro acesso, crie uma (mín. ' + SENHA_MIN + ' caracteres).'
+    : 'Digite seu nome e sua senha. Primeiro acesso? Escreva seu nome e crie uma senha.';
+  $('btn-cancelar-operador').classList.toggle('hidden', !(state.operador && state.operador.autenticado));
   $('modal-operador').classList.remove('hidden');
 }
 
-$('btn-operador').addEventListener('click', () => {
-  if(state.operador){
-    $('input-operador-nome').value = state.operador.nome || '';
-    if(state.operador.galpao) $('input-operador-galpao').value = state.operador.galpao;
-  }
-  $('modal-operador').classList.remove('hidden');
+$('btn-operador').addEventListener('click', abrirModalOperador);
+$('btn-cancelar-operador').addEventListener('click', () => $('modal-operador').classList.add('hidden'));
+// Mudou o nome → volta a tela de "confirmar senha" pro estado inicial.
+$('input-operador-nome').addEventListener('input', () => {
+  $('input-operador-senha2').classList.add('hidden');
+  $('input-operador-senha2').value = '';
 });
 
-$('btn-salvar-operador').addEventListener('click', () => {
-  const nome = $('input-operador-nome').value.trim();
-  const galpao = $('input-operador-galpao').value;
-  if(!nome){ toast('Digite seu nome', 'warn'); return; }
-  state.operador = { id: (state.operador && state.operador.id) || uid(), nome, galpao };
+function concluirLogin(nome, galpao){
+  state.operador = { id: (state.operadorSalvo && state.operadorSalvo.id) || (state.operador && state.operador.id) || uid(), nome, galpao, autenticado: true };
+  state.operadorSalvo = state.operador;
   safeSet('local', 'picking_operador', JSON.stringify(state.operador));
   $('operador-nome').textContent = nome;
   $('modal-operador').classList.add('hidden');
@@ -973,6 +1075,160 @@ $('btn-salvar-operador').addEventListener('click', () => {
   safeSet('local', 'picking_galpao_filtro', galpao);
   renderAll();
   toast(`Bem-vindo, ${nome}! Separando só o que está em ${galpao}.`, 'ok');
+}
+
+$('btn-salvar-operador').addEventListener('click', async () => {
+  const btn = $('btn-salvar-operador');
+  if(btn.disabled) return;
+  const nome = $('input-operador-nome').value.trim();
+  const senha = $('input-operador-senha').value;
+  const galpao = $('input-operador-galpao').value;
+  const key = nomeKey(nome);
+  if(!key){ toast('Digite seu nome', 'warn'); return; }
+  if(!senha){ toast('Digite sua senha', 'warn'); return; }
+  if(!cryptoOk()){ toast('Esse navegador não suporta o login com senha (precisa abrir pelo endereço seguro https).', 'error'); return; }
+  if(!db){ toast('Ainda conectando ao banco — tente de novo em instantes.', 'warn'); return; }
+
+  setBotaoCarregando(btn, true, 'Verificando...');
+  try {
+    const rec = (await db.ref(`${PATH_OPERADORES}/${key}`).once('value')).val();
+    if(rec){
+      if(await hashSenha(senha, rec.salt) !== rec.hash){
+        toast('Senha incorreta', 'error');
+        vibrate([40,60,40]);
+        return;
+      }
+      concluirLogin(rec.nome || nome, galpao);
+      return;
+    }
+    // Primeiro acesso: pede pra confirmar a senha antes de criar o cadastro.
+    if(senha.length < SENHA_MIN){ toast(`Crie uma senha com pelo menos ${SENHA_MIN} caracteres`, 'warn'); return; }
+    const senha2El = $('input-operador-senha2');
+    if(senha2El.classList.contains('hidden')){
+      senha2El.classList.remove('hidden');
+      senha2El.focus();
+      toast('Primeiro acesso! Confirme a senha pra criar seu cadastro.', 'info');
+      return;
+    }
+    if(senha2El.value !== senha){ toast('As senhas não conferem', 'warn'); return; }
+    const cred = await montarCredenciais(senha);
+    const result = await db.ref(`${PATH_OPERADORES}/${key}`).transaction(cur => {
+      if(cur) return; // alguém cadastrou esse nome agora há pouco — não sobrescreve
+      return Object.assign({ nome, galpao, criadoEm: nowTs(), criadoPor: 'proprio' }, cred);
+    });
+    if(!result.committed){
+      senha2El.classList.add('hidden');
+      toast('Esse nome já foi cadastrado — digite a senha dele.', 'warn');
+      return;
+    }
+    concluirLogin(nome, galpao);
+  } catch(e){
+    toast('Erro ao entrar: ' + (e.message || e), 'error');
+  } finally {
+    setBotaoCarregando(btn, false);
+  }
+});
+
+/* ---------- Admin: ver / definir / trocar senha de operador ---------- */
+
+async function renderOperadoresAdmin(){
+  const box = $('adm-op-lista');
+  box.innerHTML = '<div class="text-center text-slate-500 text-xs p-3">Carregando...</div>';
+  let todos = {};
+  try { todos = (await db.ref(PATH_OPERADORES).once('value')).val() || {}; }
+  catch(e){ box.innerHTML = `<div class="text-center text-red-300 text-xs p-3">Erro ao carregar: ${esc(e.message||e)}</div>`; return; }
+  const arr = Object.entries(todos).map(([key, v]) => ({ key, ...v })).sort((a,b) => String(a.nome).localeCompare(String(b.nome), 'pt-BR'));
+  if(!arr.length){
+    box.innerHTML = '<div class="text-center text-slate-500 text-xs border border-dashed border-brand-border rounded-xl p-4">Nenhum operador cadastrado ainda.</div>';
+    return;
+  }
+  box.innerHTML = arr.map(o => `
+    <div class="bg-black/20 border border-brand-border rounded-xl p-2.5" data-op-key="${esc(o.key)}">
+      <div class="flex items-center justify-between gap-2">
+        <div class="min-w-0">
+          <div class="font-black text-sm truncate">${esc(o.nome || o.key)}</div>
+          <div class="text-[10px] text-slate-500">${esc(o.galpao || '--')} · ${o.criadoPor === 'admin' ? 'cadastrado pelo admin' : 'criou a própria senha'}</div>
+        </div>
+        <div class="font-mono text-sm font-black text-slate-200 shrink-0" data-op-senha>••••••</div>
+      </div>
+      <div class="grid grid-cols-3 gap-1.5 mt-2">
+        <button class="btn-op-ver min-h-[34px] rounded-lg bg-brand-card2 border border-brand-border text-[11px] font-black">👁 Ver</button>
+        <button class="btn-op-trocar min-h-[34px] rounded-lg bg-brand-card2 border border-brand-border text-[11px] font-black">🔑 Trocar</button>
+        <button class="btn-op-excluir min-h-[34px] rounded-lg bg-red-500/10 border border-red-500/30 text-red-300 text-[11px] font-black">🗑 Excluir</button>
+      </div>
+    </div>`).join('');
+
+  const porKey = Object.fromEntries(arr.map(o => [o.key, o]));
+  box.querySelectorAll('.btn-op-ver').forEach(btn => btn.addEventListener('click', async () => {
+    const card = btn.closest('[data-op-key]');
+    const o = porKey[card.dataset.opKey];
+    const el = card.querySelector('[data-op-senha]');
+    if(el.dataset.visivel === '1'){ el.textContent = '••••••'; el.dataset.visivel = '0'; btn.textContent = '👁 Ver'; return; }
+    try {
+      el.textContent = await decifrarSenha(o.senhaCifrada);
+      el.dataset.visivel = '1'; btn.textContent = '🙈 Ocultar';
+    } catch(_){ toast('Não consegui ler essa senha — defina uma nova em "Trocar".', 'warn'); }
+  }));
+  box.querySelectorAll('.btn-op-trocar').forEach(btn => btn.addEventListener('click', async () => {
+    const o = porKey[btn.closest('[data-op-key]').dataset.opKey];
+    const nova = prompt(`Nova senha para ${o.nome} (mín. ${SENHA_MIN} caracteres):`);
+    if(nova === null) return;
+    if(nova.length < SENHA_MIN){ toast(`A senha precisa ter pelo menos ${SENHA_MIN} caracteres`, 'warn'); return; }
+    try {
+      await db.ref(`${PATH_OPERADORES}/${o.key}`).update(Object.assign(await montarCredenciais(nova), { atualizadoEm: nowTs(), atualizadoPor: 'admin' }));
+      toast(`Senha de ${o.nome} atualizada`, 'ok');
+      renderOperadoresAdmin();
+    } catch(e){ toast('Erro: ' + (e.message||e), 'error'); }
+  }));
+  box.querySelectorAll('.btn-op-excluir').forEach(btn => btn.addEventListener('click', async () => {
+    const o = porKey[btn.closest('[data-op-key]').dataset.opKey];
+    if(!confirm(`Excluir o cadastro de ${o.nome}? Ele precisará criar uma senha de novo no próximo acesso.`)) return;
+    try {
+      await db.ref(`${PATH_OPERADORES}/${o.key}`).remove();
+      toast(`${o.nome} excluído`, 'ok');
+      renderOperadoresAdmin();
+    } catch(e){ toast('Erro: ' + (e.message||e), 'error'); }
+  }));
+}
+
+$('btn-admin-operadores').addEventListener('click', () => {
+  fecharMenu();
+  if(!cryptoOk()){ toast('Esse navegador não suporta senhas (precisa de https).', 'error'); return; }
+  if(!pedirPinAdmin()) return;
+  $('adm-op-nome').value = ''; $('adm-op-senha').value = '';
+  $('modal-operadores-admin').classList.remove('hidden');
+  renderOperadoresAdmin();
+});
+$('btn-fechar-operadores-admin').addEventListener('click', () => $('modal-operadores-admin').classList.add('hidden'));
+
+$('btn-adm-op-criar').addEventListener('click', async () => {
+  const btn = $('btn-adm-op-criar');
+  if(btn.disabled) return;
+  const nome = $('adm-op-nome').value.trim();
+  const senha = $('adm-op-senha').value;
+  const galpao = $('adm-op-galpao').value;
+  const key = nomeKey(nome);
+  if(!key){ toast('Informe o nome do operador', 'warn'); return; }
+  if(senha.length < SENHA_MIN){ toast(`A senha precisa ter pelo menos ${SENHA_MIN} caracteres`, 'warn'); return; }
+  setBotaoCarregando(btn, true, 'Salvando...');
+  try {
+    const ref = db.ref(`${PATH_OPERADORES}/${key}`);
+    const existente = (await ref.once('value')).val();
+    const cred = await montarCredenciais(senha);
+    if(existente){
+      if(!confirm(`${existente.nome} já está cadastrado. Trocar a senha dele por essa?`)) return;
+      await ref.update(Object.assign(cred, { galpao, atualizadoEm: nowTs(), atualizadoPor: 'admin' }));
+    } else {
+      await ref.set(Object.assign({ nome, galpao, criadoEm: nowTs(), criadoPor: 'admin' }, cred));
+    }
+    toast(`${nome} cadastrado`, 'ok');
+    $('adm-op-nome').value = ''; $('adm-op-senha').value = '';
+    renderOperadoresAdmin();
+  } catch(e){
+    toast('Erro: ' + (e.message||e), 'error');
+  } finally {
+    setBotaoCarregando(btn, false);
+  }
 });
 
 $('sel-galpao').addEventListener('change', e => {
@@ -1132,10 +1388,22 @@ function pedidosBreakdownHtml(item){
     </div>`;
 }
 
+// Marcador "passou pela revisão": o item já foi dado como não encontrado e
+// depois achado/separado. Itens antigos não têm o flag passouRevisao, mas
+// guardaram revisaoOperador1 — serve de fallback. Não vale pra quem ainda
+// está em revisão (já tem a etiqueta vermelha própria) nem pra falta definitiva.
+function tagPassouRevisao(item){
+  if(item.status === 'revisao' || item.status === 'falta_definitiva') return '';
+  if(!item.passouRevisao && !item.revisaoOperador1) return '';
+  const quem = item.revisaoOperador1 ? `Não encontrado por ${item.revisaoOperador1}${item.revisaoMotivo ? ' (' + item.revisaoMotivo + ')' : ''}` : 'Foi marcado como não encontrado';
+  const achou = item.operadorSeparou ? ` · achado por ${item.operadorSeparou}` : '';
+  return `<span class="tag-pill bg-red-500/15 text-red-300 border border-red-500/40" title="${esc(quem + achou)}">🔁 Passou pela revisão</span>`;
+}
+
 function itemCardHtml(item){
   const statusTag = {
     pendente: '',
-    revisao: '<span class="tag-pill bg-yellow-500/15 text-yellow-300 border border-yellow-500/30">Revisão</span>',
+    revisao: '<span class="tag-pill bg-red-500/20 text-red-300 border border-red-500/50">🚨 Revisão</span>',
     separado: '<span class="tag-pill bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">Separado</span>',
     falta_definitiva: '<span class="tag-pill bg-red-500/15 text-red-300 border border-red-500/30">Falta definitiva</span>'
   }[item.status] || '';
@@ -1191,7 +1459,7 @@ function itemCardHtml(item){
     : '';
 
   return `
-  <div class="bg-brand-card border ${item.status==='revisao' ? 'border-brand-yellow/50' : 'border-brand-border'} rounded-xl p-3 space-y-2" data-item-id="${item.id}">
+  <div class="${item.status==='revisao' ? 'bg-red-500/10 border border-red-500/60' : 'bg-brand-card border border-brand-border'} rounded-xl p-3 space-y-2" data-item-id="${item.id}">
     <div class="flex items-center justify-between gap-2">
       <div class="flex items-center gap-2 min-w-0">
         ${foto}
@@ -1199,6 +1467,7 @@ function itemCardHtml(item){
           <div class="flex items-center gap-1.5 flex-wrap">
             <span class="font-black text-sm">${esc(item.sku)}</span>
             ${statusTag}
+            ${tagPassouRevisao(item)}
             ${ondeEsta}
             ${prioridadeTag}
             ${grupo}
@@ -1209,7 +1478,7 @@ function itemCardHtml(item){
           <div class="text-[11px] text-slate-400 truncate">${esc(item.descricao||'')}</div>
           <div class="text-[10px] text-slate-500 mt-0.5">${origem}${esc(item.identificacao||'Sem identificação')} · ${esc(item.galpao||'--')} · Qtd ${fmtQty(item.qtdPedida)}</div>
           ${item.localInformadoObs ? `<div class="text-[10px] text-emerald-300 mt-0.5">💬 ${esc(item.localInformadoObs)}</div>` : ''}
-          ${item.status === 'revisao' && item.revisaoMotivo ? `<div class="text-[10px] text-yellow-300 mt-0.5">⚠ ${esc(item.revisaoMotivo)} (${esc(item.revisaoOperador1||'--')})</div>` : ''}
+          ${item.status === 'revisao' && item.revisaoMotivo ? `<div class="text-[10px] text-red-300 font-bold mt-0.5">⚠ ${esc(item.revisaoMotivo)} (${esc(item.revisaoOperador1||'--')})</div>` : ''}
         </div>
       </div>
       <div class="flex items-center gap-1.5 shrink-0">
@@ -1242,9 +1511,9 @@ function melhorPedidoDoItem(item){
 }
 
 function renderFila(){
-  // Item em revisão sai da Fila — fica só na aba Revisão, pra não misturar
-  // com o que ainda nem foi tentado.
-  const arr = itemsArray().filter(i => i.status === 'pendente' && passaGalpao(i));
+  // Item em revisão também aparece na Fila (em vermelho) — além da aba
+  // Revisão — pra ninguém esquecer dele; ainda precisa ser achado.
+  const arr = itemsArray().filter(i => (i.status === 'pendente' || i.status === 'revisao') && passaGalpao(i));
   // No ERP, respeita a ordem de separação (emergencial > retirada > entrega,
   // depois quem entrega mais cedo). No MKT continua só por ordem de chegada.
   arr.sort((a,b) => {
@@ -1611,6 +1880,7 @@ $('btn-confirmar-separacao').addEventListener('click', async () => {
         cur.penalidadeTs = nowTs();
       }
 
+      if(cur.status === 'revisao') cur.passouRevisao = true; // marcador: foi achado depois de dado como não encontrado
       cur.status = 'separado';
       cur.qtdSeparada = qtd;
       cur.localFisico = local;
@@ -1701,6 +1971,7 @@ async function confirmarSeparacaoParcial(item, pedidosGrupo, idx, local, galpaoE
         cur.penalidadeTs = nowTs();
       }
 
+      if(cur.status === 'revisao') cur.passouRevisao = true;
       cur.pedidosAgrupados = restante;
       cur.qtdPedida = Math.max(0, Number(cur.qtdPedida||0) - qtdRemovida);
       cur.qtdSeparada = Number(cur.qtdSeparada||0) + qtdRemovida;
@@ -1730,12 +2001,10 @@ async function confirmarSeparacaoParcial(item, pedidosGrupo, idx, local, galpaoE
         cur.operadorSeparou = state.operador.nome;
         cur.dataHoraSeparado = nowTs();
       } else {
-        // Ainda sobra pedido(s) — volta (ou mantém) pendente na fila, já sem
-        // marca de revisão (o produto acabou de ser encontrado/separado).
+        // Ainda sobra pedido(s) — volta (ou mantém) pendente na fila (o
+        // produto acabou de ser encontrado). Os dados da revisão ficam
+        // guardados, junto com passouRevisao, pro marcador continuar aparecendo.
         cur.status = 'pendente';
-        cur.revisaoMotivo = null;
-        cur.revisaoOperador1 = null;
-        cur.revisaoTs1 = null;
       }
       cur.emSeparacaoPor = null;
       cur.emSeparacaoDesde = null;
@@ -2022,6 +2291,7 @@ function renderProdutividade(){
 function separadoCardHtml(item){
   const foto = item.foto ? `<img src="${esc(item.foto)}" class="w-11 h-11 rounded-lg object-cover bg-black/30 border border-brand-border shrink-0" alt="">` : '';
   const sobraTag = item.sobra ? `<span class="tag-pill bg-orange-500/15 text-orange-300 border border-orange-500/30">📦 Sobra</span>` : '';
+  const revisaoTag = tagPassouRevisao(item);
   const quando = item.dataHoraSeparado ? new Date(item.dataHoraSeparado).toLocaleString('pt-BR') : '--';
   return `
   <div class="bg-brand-card border border-brand-border rounded-xl p-3 space-y-2">
@@ -2031,6 +2301,7 @@ function separadoCardHtml(item){
         <div class="flex items-center gap-1.5 flex-wrap">
           <span class="font-black text-sm">${esc(item.sku)}</span>
           <span class="tag-pill bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">Separado</span>
+          ${revisaoTag}
           ${sobraTag}
         </div>
         <div class="text-[11px] text-slate-400 truncate">${esc(item.descricao||'')}</div>
@@ -2056,6 +2327,7 @@ function separadoItemMiniHtml(item, qtdNessePedido){
     <div class="min-w-0 flex-1">
       <div class="flex items-center gap-1.5 flex-wrap">
         <span class="font-black text-xs">${esc(item.sku)}</span>
+        ${tagPassouRevisao(item)}
         ${sobraTag}
         ${estoqueBaixoTag}
       </div>
