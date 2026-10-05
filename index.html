@@ -53,7 +53,7 @@
   .modal-card{animation:modalIn .16s ease both}
   @keyframes modalIn{from{opacity:0;transform:scale(.97)}to{opacity:1;transform:scale(1)}}
   input[type=number]::-webkit-inner-spin-button{opacity:1}
-  .tag-pill{display:inline-flex;align-items:center;gap:4px;border-radius:999px;padding:2px 8px;font-size:10px;font-weight:800;letter-spacing:.02em}
+  .tag-pill{display:inline-flex;align-items:center;gap:4px;border-radius:999px;padding:2px 8px;font-size:10px;font-weight:800;letter-spacing:.02em;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}
 </style>
 </head>
 <body class="bg-brand-bg text-slate-100 min-h-screen font-sans text-[13px]">
@@ -410,7 +410,7 @@
 <!-- ===================== MODAL: CONFIRMAR SEPARAÇÃO ===================== -->
 <div id="modal-confirmar" class="hidden fixed inset-0 z-[85] bg-black/85 flex items-end sm:items-center justify-center p-2">
   <div class="modal-card w-full max-w-md bg-brand-card border border-brand-border rounded-2xl p-4 space-y-3 max-h-[92vh] overflow-y-auto">
-    <img id="conf-foto" class="hidden w-full max-h-52 object-contain rounded-xl bg-black/30 border border-brand-border" alt="Foto do produto">
+    <img id="conf-foto" class="hidden w-full max-h-36 object-contain rounded-xl bg-black/30 border border-brand-border" alt="Foto do produto">
     <div>
       <div class="text-[10px] text-slate-500 font-bold uppercase">SKU</div>
       <div id="conf-sku" class="text-lg font-black">--</div>
@@ -418,7 +418,7 @@
       <div class="flex flex-wrap gap-1.5 mt-2">
         <span id="conf-pedido" class="tag-pill bg-sky-500/10 text-sky-300 border border-sky-500/30">-- </span>
         <span id="conf-origem" class="hidden tag-pill bg-orange-500/10 text-orange-300 border border-orange-500/30">📍 Buscar em: --</span>
-        <span id="conf-status-tag" class="tag-pill hidden bg-yellow-500/10 text-yellow-300 border border-yellow-500/30">Em revisão</span>
+        <span id="conf-status-tag" class="tag-pill hidden bg-red-500/15 text-red-300 border border-red-500/50">🚨 Em revisão</span>
       </div>
       <div id="conf-estoque-locais" class="hidden text-[10px] text-emerald-300 mt-1">🏭 Estoque informou: --</div>
       <div id="conf-onde-informado" class="hidden bg-emerald-500/10 border border-emerald-500/40 rounded-xl p-2 mt-2 text-[11px] text-emerald-200 font-bold"></div>
@@ -1415,7 +1415,7 @@ function itemCardHtml(item){
   const ondeEsta = item.localInformadoPor
     ? `<span class="tag-pill bg-emerald-500/15 text-emerald-300 border border-emerald-500/40" title="Informado por ${esc(item.localInformadoPor)}">✅ ${esc(item.galpao || 'Sem galpão')}${item.localFisicoSugerido ? ' · ' + esc(item.localFisicoSugerido) : ''}</span>`
     : `<span class="tag-pill bg-sky-500/15 text-sky-300 border border-sky-500/30">📍 ${esc(item.galpao || 'Sem galpão')}${item.localFisicoSugerido ? ' · ' + esc(item.localFisicoSugerido) : ''}</span>`;
-  const btnInformarLocal = `<button class="btn-informar-local-item shrink-0 min-h-[40px] px-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 font-black text-xs" title="Supervisor: informar onde o produto está">📌</button>`;
+  const btnInformarLocal = `<button class="btn-informar-local-item shrink-0 w-10 min-h-[42px] rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 font-black text-xs" title="Supervisor: informar onde o produto está">📌</button>`;
   const foto = item.foto ? `<img src="${esc(item.foto)}" class="w-11 h-11 rounded-lg object-cover bg-black/30 border border-brand-border shrink-0" alt="">` : '';
   const nPedidos = Array.isArray(item.pedidosAgrupados) ? item.pedidosAgrupados.length : 1;
   const grupo = nPedidos > 1 ? `<span class="tag-pill bg-sky-500/15 text-sky-300 border border-sky-500/30">🔗 ${nPedidos} pedidos</span>` : '';
@@ -1445,51 +1445,49 @@ function itemCardHtml(item){
   // mede quanto tempo esse item levou pra ser encontrado.
   const podeBuscar = item.status !== 'separado' && item.status !== 'falta_definitiva' && !lockOutro;
   const btnBuscar = podeBuscar
-    ? `<button class="btn-buscar-item shrink-0 min-h-[40px] px-3 rounded-xl ${lockMeu ? 'bg-brand-card2 border border-brand-border text-slate-300' : 'bg-purple-500/15 border border-purple-500/40 text-purple-300'} font-black text-xs">${lockMeu ? '🔍 Buscando' : '🔍 Buscar'}</button>`
+    ? `<button class="btn-buscar-item flex-1 min-w-0 min-h-[42px] px-2 rounded-xl ${lockMeu ? 'bg-brand-card2 border border-brand-border text-slate-300' : 'bg-purple-500/15 border border-purple-500/40 text-purple-300'} font-black text-xs">${lockMeu ? '🔍 Buscando' : '🔍 Buscar'}</button>`
     : '';
 
   // Avisar estoque baixo independe do status do item (mesmo já separado, o
   // produto pode estar acabando no estoque) — por isso não tem "podeX" aqui.
-  const btnEstoqueBaixo = `<button class="btn-estoque-baixo-item shrink-0 min-h-[40px] px-2.5 rounded-xl ${item.estoqueBaixo ? 'bg-orange-500/20 border border-orange-500/50 text-orange-300' : 'bg-brand-card2 border border-brand-border text-slate-400'} font-black text-xs" title="${item.estoqueBaixo ? 'Remover aviso de estoque baixo' : 'Avisar que o estoque está baixo/acabando'}">📉</button>`;
+  const btnEstoqueBaixo = `<button class="btn-estoque-baixo-item shrink-0 w-10 min-h-[42px] rounded-xl ${item.estoqueBaixo ? 'bg-orange-500/20 border border-orange-500/50 text-orange-300' : 'bg-brand-card2 border border-brand-border text-slate-400'} font-black text-xs" title="${item.estoqueBaixo ? 'Remover aviso de estoque baixo' : 'Avisar que o estoque está baixo/acabando'}">📉</button>`;
 
   // Só faz sentido "devolver pra fila" um item que já saiu do fluxo normal
   // (revisão) — pendente já está na fila. Ação de admin, pede PIN na hora do clique.
   const btnReverterAdmin = item.status === 'revisao'
-    ? `<button class="btn-reverter-item shrink-0 min-h-[40px] px-2.5 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 font-black text-xs" title="Admin: devolver pra fila (pendente)">↩️</button>`
+    ? `<button class="btn-reverter-item shrink-0 w-10 min-h-[42px] rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 font-black text-xs" title="Admin: devolver pra fila (pendente)">↩️</button>`
     : '';
 
   return `
   <div class="${item.status==='revisao' ? 'bg-red-500/10 border border-red-500/60' : 'bg-brand-card border border-brand-border'} rounded-xl p-3 space-y-2" data-item-id="${item.id}">
-    <div class="flex items-center justify-between gap-2">
-      <div class="flex items-center gap-2 min-w-0">
-        ${foto}
-        <div class="min-w-0">
-          <div class="flex items-center gap-1.5 flex-wrap">
-            <span class="font-black text-sm">${esc(item.sku)}</span>
-            ${statusTag}
-            ${tagPassouRevisao(item)}
-            ${ondeEsta}
-            ${prioridadeTag}
-            ${grupo}
-            ${lock}
-            ${buscando}
-            ${estoqueBaixoTag}
-          </div>
-          <div class="text-[11px] text-slate-400 truncate">${esc(item.descricao||'')}</div>
-          <div class="text-[10px] text-slate-500 mt-0.5">${origem}${esc(item.identificacao||'Sem identificação')} · ${esc(item.galpao||'--')} · Qtd ${fmtQty(item.qtdPedida)}</div>
-          ${item.localInformadoObs ? `<div class="text-[10px] text-emerald-300 mt-0.5">💬 ${esc(item.localInformadoObs)}</div>` : ''}
-          ${item.status === 'revisao' && item.revisaoMotivo ? `<div class="text-[10px] text-red-300 font-bold mt-0.5">⚠ ${esc(item.revisaoMotivo)} (${esc(item.revisaoOperador1||'--')})</div>` : ''}
+    <div class="flex items-start gap-2.5 min-w-0">
+      ${foto}
+      <div class="min-w-0 flex-1">
+        <div class="font-black text-sm break-all leading-tight">${esc(item.sku)}</div>
+        <div class="flex items-center gap-1.5 flex-wrap mt-1">
+          ${statusTag}
+          ${tagPassouRevisao(item)}
+          ${ondeEsta}
+          ${prioridadeTag}
+          ${grupo}
+          ${lock}
+          ${buscando}
+          ${estoqueBaixoTag}
         </div>
-      </div>
-      <div class="flex items-center gap-1.5 shrink-0">
-        ${btnInformarLocal}
-        ${btnEstoqueBaixo}
-        ${btnReverterAdmin}
-        ${btnBuscar}
-        <button class="btn-abrir-item shrink-0 min-h-[40px] px-3 rounded-xl bg-brand-blue text-black font-black text-xs">Abrir</button>
+        <div class="text-[11px] text-slate-300 mt-1 leading-snug break-words">${esc(item.descricao||'')}</div>
+        <div class="text-[10px] text-slate-500 mt-0.5 leading-snug break-words">${origem}${esc(item.identificacao||'Sem identificação')} · Qtd ${fmtQty(item.qtdPedida)}</div>
+        ${item.localInformadoObs ? `<div class="text-[10px] text-emerald-300 mt-0.5">💬 ${esc(item.localInformadoObs)}</div>` : ''}
+        ${item.status === 'revisao' && item.revisaoMotivo ? `<div class="text-[10px] text-red-300 font-bold mt-0.5">⚠ ${esc(item.revisaoMotivo)} (${esc(item.revisaoOperador1||'--')})</div>` : ''}
       </div>
     </div>
     ${pedidosBreakdownHtml(item)}
+    <div class="flex items-center gap-1.5">
+      ${btnInformarLocal}
+      ${btnEstoqueBaixo}
+      ${btnReverterAdmin}
+      ${btnBuscar}
+      <button class="btn-abrir-item flex-1 min-w-0 min-h-[42px] px-3 rounded-xl bg-brand-blue text-black font-black text-sm">Abrir</button>
+    </div>
   </div>`;
 }
 
@@ -4099,7 +4097,7 @@ function renderImportacoes(){
     <div class="bg-brand-card border border-brand-border rounded-xl p-2.5 space-y-2" data-import-id="${i.id}">
       <div class="flex items-center justify-between gap-2">
         <div class="min-w-0">
-          <div class="text-xs font-bold truncate">${esc(i.identificacao || 'Sem identificação')} · ${esc(i.totalItens||0)} itens · ${esc(i.operador||'--')}</div>
+          <div class="text-xs font-bold break-words leading-snug">${esc(i.identificacao || 'Sem identificação')} · ${esc(i.totalItens||0)} itens · ${esc(i.operador||'--')}</div>
           <div class="text-[10px] text-slate-500">${i.criadoEm ? new Date(i.criadoEm).toLocaleString('pt-BR') : ''}</div>
           ${datasArea}
           <div class="text-[10px] text-slate-500 mt-0.5">${pendentes} pendente(s) · ${separados} separado(s) · ${faltando} falta(s)</div>
