@@ -439,7 +439,7 @@
         <input id="conf-qtd" type="number" step="0.01" min="0" class="w-full bg-black/40 border border-brand-border rounded-xl px-3 py-3 text-center font-black text-lg outline-none">
       </div>
       <div>
-        <div class="text-[10px] text-slate-500 font-bold uppercase mb-1">Pedida</div>
+        <div id="conf-qtd-pedida-label" class="text-[10px] text-slate-500 font-bold uppercase mb-1">Pedida</div>
         <div id="conf-qtd-pedida" class="w-full bg-black/20 border border-brand-border rounded-xl px-3 py-3 text-center font-black text-lg text-slate-400">--</div>
       </div>
     </div>
@@ -585,8 +585,9 @@ const GALPOES = ['Leopoldo', '21 de Abril', 'Cesário'];
 // a solução é comparar a versão atual com a última vista NESSE aparelho
 // (localStorage) — se mudou, mostra um modal com o que foi adicionado.
 // Pra lançar uma novidade: só bumpar APP_VERSAO e acrescentar um item aqui.
-const APP_VERSAO = '2026-10-06.1';
+const APP_VERSAO = '2026-10-06.2';
 const NOVIDADES_ATUAIS = [
+  'Corrigido: se você informar MENOS do que falta (ex: faltam 8 e achou 4), só essas 4 vão pra "Separados" e as outras 4 continuam pendentes na fila. O card mostra "já separou 4 — faltam 4". Quando fechar o restante, o item vai pra Separados por completo.',
   'Agora o acesso é com nome e SENHA. No primeiro acesso você cria a sua (digite seu nome, uma senha e confirme). Da próxima vez é só nome + senha. Quem esquecer a senha fala com o administrador.',
   'Itens em revisão agora também aparecem na Fila, em vermelho (🚨 Revisão). Quando forem achados e separados, ficam com o marcador "🔁 Passou pela revisão" (passe o dedo/mouse pra ver quem não achou e quem achou).',
   'Novo botão "📌" (supervisor, pede PIN) em cada item: informa o galpão e o local onde o produto está. O item passa a aparecer pro separador daquele galpão, com o local indicado em verde (e a observação, se tiver) — também dá pra informar de dentro da tela de confirmação.',
@@ -662,32 +663,34 @@ async function reverterItemParaFila(itemId){
   if(!item) return;
   if(!confirm(`Reverter "${item.sku}" para a fila (volta a pendente)? A separação atual será desfeita.`)) return;
   try {
-    await db.ref(`${pathFila()}/${itemId}`).update({
-      status: 'pendente',
-      qtdSeparada: null,
-      localFisico: null,
-      operadorSeparou: null,
-      dataHoraSeparado: null,
-      tempoBuscaMs: null,
-      buscaIniciadaEm: null,
-      buscaIniciadaPor: null,
-      revisaoMotivo: null,
-      revisaoOperador1: null,
-      revisaoTs1: null,
-      revisaoMotivo2: null,
-      revisaoOperador2: null,
-      revisaoTs2: null,
-      passouRevisao: null,
-      sobra: null,
-      sobraMotivo: null,
-      sobraObs: null,
-      sobraOperador: null,
-      sobraTs: null,
-      emSeparacaoPor: null,
-      emSeparacaoDesde: null,
-      atualizadoEm: nowTs(),
-      revertidoPor: state.operador ? state.operador.nome : 'admin',
-      revertidoEm: nowTs()
+    await db.ref(`${pathFila()}/${itemId}`).transaction(cur => {
+      if(!cur) return cur;
+      // Item com separação parcial (por quantidade/pedido): devolve também as
+      // quantidades já separadas pra lista de pedidos e pro total que falta,
+      // senão ele voltaria pra fila sem nada (ou só com o resto).
+      const parciais = Array.isArray(cur.separacoesParciais) ? cur.separacoesParciais : [];
+      if(parciais.length){
+        const mapa = new Map();
+        const somar = (p, qtd) => {
+          const k = (p.importId || '') + '|' + (p.identificacao || '');
+          const e = mapa.get(k);
+          if(e) e.quantidade += qtd; else mapa.set(k, { importId: p.importId || '', identificacao: p.identificacao || '', quantidade: qtd });
+        };
+        (Array.isArray(cur.pedidosAgrupados) ? cur.pedidosAgrupados : []).forEach(p => somar(p, Number(p.quantidade) || 0));
+        parciais.forEach(p => somar(p, Number(p.quantidade) || 0));
+        const lista = [...mapa.values()];
+        cur.pedidosAgrupados = lista;
+        cur.qtdPedida = lista.reduce((s, p) => s + p.quantidade, 0);
+      }
+      cur.status = 'pendente';
+      ['qtdSeparada','localFisico','operadorSeparou','dataHoraSeparado','tempoBuscaMs','buscaIniciadaEm','buscaIniciadaPor',
+       'revisaoMotivo','revisaoOperador1','revisaoTs1','revisaoMotivo2','revisaoOperador2','revisaoTs2','passouRevisao',
+       'sobra','sobraMotivo','sobraObs','sobraOperador','sobraTs','emSeparacaoPor','emSeparacaoDesde','separacoesParciais'
+      ].forEach(k => { delete cur[k]; });
+      cur.atualizadoEm = nowTs();
+      cur.revertidoPor = state.operador ? state.operador.nome : 'admin';
+      cur.revertidoEm = nowTs();
+      return cur;
     });
     toast(`↩️ ${item.sku} devolvido para a fila`, 'ok');
   } catch(e){
@@ -1476,6 +1479,7 @@ function itemCardHtml(item){
         </div>
         <div class="text-[11px] text-slate-300 mt-1 leading-snug break-words">${esc(item.descricao||'')}</div>
         <div class="text-[10px] text-slate-500 mt-0.5 leading-snug break-words">${origem}${esc(item.identificacao||'Sem identificação')} · Qtd ${fmtQty(item.qtdPedida)}</div>
+        ${Number(item.qtdSeparada) > 0 ? `<div class="text-[10px] text-emerald-300 font-bold mt-0.5">✔ já separou ${fmtQty(item.qtdSeparada)} un. — faltam ${fmtQty(item.qtdPedida)}</div>` : ''}
         ${item.localInformadoObs ? `<div class="text-[10px] text-emerald-300 mt-0.5">💬 ${esc(item.localInformadoObs)}</div>` : ''}
         ${item.status === 'revisao' && item.revisaoMotivo ? `<div class="text-[10px] text-red-300 font-bold mt-0.5">⚠ ${esc(item.revisaoMotivo)} (${esc(item.revisaoOperador1||'--')})</div>` : ''}
       </div>
@@ -1798,7 +1802,9 @@ function openConfirmModal(item){
   }
 
   $('conf-qtd-pedida').textContent = fmtQty(item.qtdPedida);
-  qtdInput.value = fmtQty(Math.max(0, Number(item.qtdPedida||0) - Number(item.qtdSeparada||0)));
+  // qtdPedida é o que AINDA falta; se já separou parte, deixa claro.
+  $('conf-qtd-pedida-label').textContent = Number(item.qtdSeparada) > 0 ? ('Falta (já separou ' + fmtQty(item.qtdSeparada) + ')') : 'Pedida';
+  qtdInput.value = fmtQty(Math.max(0, Number(item.qtdPedida||0)));
 
   // Memória de localização: se esse SKU já foi separado antes, usa o último
   // galpão/local conhecido como ponto de partida (o operador pode corrigir).
@@ -1828,7 +1834,7 @@ $('conf-pedido-alvo').addEventListener('change', () => {
   const qtdInput = $('conf-qtd');
   const val = $('conf-pedido-alvo').value;
   if(val === '__todos__'){
-    qtdInput.value = fmtQty(Math.max(0, Number(item.qtdPedida||0) - Number(item.qtdSeparada||0)));
+    qtdInput.value = fmtQty(Math.max(0, Number(item.qtdPedida||0)));
     qtdInput.readOnly = false;
     qtdInput.classList.remove('opacity-60');
   } else {
@@ -1857,7 +1863,20 @@ $('btn-confirmar-separacao').addEventListener('click', async () => {
   const grupoVisivel = !$('conf-pedidos-agrupados').classList.contains('hidden');
   const alvoValor = grupoVisivel ? $('conf-pedido-alvo').value : '__todos__';
   if(pedidosGrupo.length > 1 && alvoValor !== '__todos__'){
-    await confirmarSeparacaoParcial(item, pedidosGrupo, Number(alvoValor), local, galpaoEscolhido);
+    const alvo = pedidosGrupo[Number(alvoValor)];
+    if(!alvo){ toast('Pedido inválido', 'error'); return; }
+    await confirmarSeparacaoQuantidade(item, null, alvo.importId, local, galpaoEscolhido);
+    return;
+  }
+
+  // Informou MENOS do que falta (ex: faltam 8 e achou 4): separa só essa
+  // quantidade e deixa o resto pendente na fila — não pode mandar tudo pra
+  // "separado". Também vale se o item já teve separação parcial antes (aí o
+  // fechamento precisa registrar o último pedaço no histórico).
+  const faltaSeparar = Number(item.qtdPedida) || 0;
+  const jaTemHistorico = Array.isArray(item.separacoesParciais) && item.separacoesParciais.length > 0;
+  if(qtd < faltaSeparar - 1e-9 || jaTemHistorico){
+    await confirmarSeparacaoQuantidade(item, qtd, null, local, galpaoEscolhido);
     return;
   }
 
@@ -1923,44 +1942,76 @@ $('btn-confirmar-separacao').addEventListener('click', async () => {
   state.itemAtual = null;
 });
 
-// Separação PARCIAL: o item ficou unificado de vários pedidos (ex: 26 un.
-// somando 4 pedidos) mas só a quantidade de UM deles chegou/foi encontrada
-// agora. Tira só esse pedido do grupo (debita a quantidade dele do total) e
-// deixa o resto pendente na fila — quando o último pedido do grupo for
-// separado dessa forma, aí sim o item fecha ('separado') igual sempre foi.
-async function confirmarSeparacaoParcial(item, pedidosGrupo, idx, local, galpaoEscolhido){
-  const pedidoAlvo = pedidosGrupo[idx];
-  if(!pedidoAlvo){ toast('Pedido inválido', 'error'); return; }
-
+// Separação PARCIAL: separou MENOS do que falta (ex: faltam 8, achou 4) ou
+// só a parte de UM pedido de um item unificado. O que foi separado sai da
+// conta (debita qtdPedida / tira o pedido da lista) e o RESTO continua
+// pendente na fila pra ser separado depois. Só quando não sobra nada o item
+// fecha como 'separado'.
+//   qtdDigitada: quantidade que o operador informou (ignorada se alvoImportId)
+//   alvoImportId: se vier, separa exatamente a parte desse pedido
+// A quantidade vai consumindo os pedidos do item em ordem de prioridade
+// (emergencial > retirada > entrega no ERP; ordem de chegada no resto) —
+// um pedido só some da lista quando é atendido por completo; o último que
+// ficar pela metade só tem a quantidade reduzida.
+async function confirmarSeparacaoQuantidade(item, qtdDigitada, alvoImportId, local, galpaoEscolhido){
   const ref = db.ref(`${pathFila()}/${item.id}`);
+  let completosOuter = [], somaOuter = 0;
   try {
     const result = await ref.transaction(cur => {
       if(!cur) return cur;
       if(cur.status !== 'pendente' && cur.status !== 'revisao') return; // outro operador já mexeu
 
-      const listaAtual = Array.isArray(cur.pedidosAgrupados) ? cur.pedidosAgrupados : [];
-      // Reacha o pedido pelo importId (não pelo índice) — a transaction pode
-      // rodar de novo com dados mais frescos se outro operador mexeu junto.
-      const pos = listaAtual.findIndex(p => p.importId === pedidoAlvo.importId);
-      if(pos === -1) return; // esse pedido já não está mais nesse item
+      const lista = (Array.isArray(cur.pedidosAgrupados) && cur.pedidosAgrupados.length)
+        ? cur.pedidosAgrupados.map(p => Object.assign({}, p))
+        : [{ importId: cur.importId || '', identificacao: cur.identificacao || '', quantidade: Number(cur.qtdPedida) || 0 }];
 
-      const restante = listaAtual.slice();
-      const [removido] = restante.splice(pos, 1);
-      const qtdRemovida = Number(removido.quantidade) || 0;
+      let restante;
+      if(alvoImportId){
+        const alvo = lista.find(p => p.importId === alvoImportId);
+        if(!alvo) return; // esse pedido já foi separado por outro operador
+        restante = Number(alvo.quantidade) || 0;
+      } else {
+        restante = Number(qtdDigitada) || 0;
+      }
+      if(restante <= 0) return;
 
-      // O item guarda também um "importId" próprio (quem criou esse registro
-      // na fila, geralmente o primeiro pedido importado) — usado em outros
-      // lugares (contagem nos cards de "Pedidos recentes", checagem de
-      // conclusão). Se o pedido removido agora É esse dono original, precisa
-      // passar a dona pra outro pedido que ainda sobrou, senão esse pedido
-      // que acabou de ser concluído nunca vai aparecer como "✅ Concluída"
-      // (o item continuaria "pertencendo" a ele pra sempre).
-      if(cur.importId === removido.importId && restante.length){
-        cur.importId = restante[0].importId;
+      // Ordem em que os pedidos "consomem" a quantidade separada.
+      const ordem = lista.map((_, i) => i).sort((a, b) => {
+        if(alvoImportId){
+          const aa = lista[a].importId === alvoImportId, bb = lista[b].importId === alvoImportId;
+          if(aa !== bb) return aa ? -1 : 1;
+        }
+        return compararPrioridadePedido(state.importacoes[lista[a].importId], state.importacoes[lista[b].importId]) || (a - b);
+      });
+
+      const eventos = [];
+      ordem.forEach(i => {
+        if(restante <= 1e-9) return;
+        const p = lista[i];
+        const falta = Number(p.quantidade) || 0;
+        const take = Math.min(falta, restante);
+        if(take <= 0) return;
+        eventos.push({ importId: p.importId || '', identificacao: p.identificacao || '', quantidade: take });
+        restante -= take;
+        p.quantidade = falta - take;
+      });
+      if(!eventos.length) return;
+
+      const nova = lista.filter(p => (Number(p.quantidade) || 0) > 1e-9);
+      const completos = lista.filter(p => !((Number(p.quantidade) || 0) > 1e-9)).map(p => p.importId).filter(Boolean);
+      const somaSeparada = eventos.reduce((s, e) => s + e.quantidade, 0);
+      completosOuter = completos; somaOuter = somaSeparada;
+
+      // O item guarda também um "importId"/"identificacao" próprios (quem criou
+      // o registro, geralmente o 1º pedido importado). Se esse pedido acabou de
+      // ser atendido por completo, passa a "dona" pra outro que ainda sobrou —
+      // senão ele nunca apareceria como "✅ Concluída".
+      if(nova.length && completos.includes(cur.importId)){
+        cur.importId = nova[0].importId;
+        if(nova[0].identificacao) cur.identificacao = nova[0].identificacao;
       }
 
-      // Mesma regra de penalidade do fluxo normal: se estava em revisão e
-      // quem separa agora não foi quem marcou "não encontrado", é penalidade.
+      // Mesma regra de penalidade do fluxo normal.
       if(cur.status === 'revisao' && cur.revisaoOperador1 && cur.revisaoOperador1 !== state.operador.nome){
         cur.penalidadeAplicada = true;
         cur.penalidadeOperador = cur.revisaoOperador1;
@@ -1968,46 +2019,35 @@ async function confirmarSeparacaoParcial(item, pedidosGrupo, idx, local, galpaoE
         cur.penalidadeEncontradoPor = state.operador.nome;
         cur.penalidadeTs = nowTs();
       }
-
       if(cur.status === 'revisao') cur.passouRevisao = true;
-      cur.pedidosAgrupados = restante;
-      cur.qtdPedida = Math.max(0, Number(cur.qtdPedida||0) - qtdRemovida);
-      cur.qtdSeparada = Number(cur.qtdSeparada||0) + qtdRemovida;
+
+      cur.pedidosAgrupados = nova;
+      cur.qtdPedida = nova.reduce((s, p) => s + (Number(p.quantidade) || 0), 0);
+      cur.qtdSeparada = Number(cur.qtdSeparada || 0) + somaSeparada;
       cur.atualizadoEm = nowTs();
 
-      // Histórico de cada pedaço separado — dá crédito de produtividade pro
-      // operador de CADA pedaço (não só de quem fechar o último) e registra
-      // exatamente quem separou a parte de qual pedido, quando e onde achou.
+      // Histórico de cada pedaço separado — dá crédito de produtividade ao
+      // operador de CADA pedaço e registra quem separou o quê, quando e onde.
+      const agora = nowTs();
       const historico = Array.isArray(cur.separacoesParciais) ? cur.separacoesParciais.slice() : [];
-      historico.push({
-        importId: removido.importId || '',
-        identificacao: removido.identificacao || '',
-        quantidade: qtdRemovida,
-        operador: state.operador.nome,
-        localFisico: local,
-        galpao: galpaoEscolhido,
-        dataHora: nowTs()
-      });
+      eventos.forEach(e => historico.push(Object.assign({}, e, {
+        operador: state.operador.nome, localFisico: local, galpao: galpaoEscolhido, dataHora: agora
+      })));
       cur.separacoesParciais = historico;
 
-      if(restante.length === 0){
-        // Era o último pedido pendente desse grupo — fecha o item, igual ao
-        // fluxo normal de separação completa.
+      if(nova.length === 0){
         cur.status = 'separado';
         cur.localFisico = local;
         cur.galpao = galpaoEscolhido;
         cur.operadorSeparou = state.operador.nome;
-        cur.dataHoraSeparado = nowTs();
+        cur.dataHoraSeparado = agora;
       } else {
-        // Ainda sobra pedido(s) — volta (ou mantém) pendente na fila (o
-        // produto acabou de ser encontrado). Os dados da revisão ficam
-        // guardados, junto com passouRevisao, pro marcador continuar aparecendo.
-        cur.status = 'pendente';
+        cur.status = 'pendente'; // sobrou quantidade: continua na fila
       }
       cur.emSeparacaoPor = null;
       cur.emSeparacaoDesde = null;
       if(cur.buscaIniciadaEm){
-        cur.tempoBuscaMs = Math.max(0, nowTs() - cur.buscaIniciadaEm);
+        cur.tempoBuscaMs = Math.max(0, agora - cur.buscaIniciadaEm);
         cur.buscaIniciadaEm = null;
         cur.buscaIniciadaPor = null;
       }
@@ -2015,7 +2055,7 @@ async function confirmarSeparacaoParcial(item, pedidosGrupo, idx, local, galpaoE
     });
 
     if(!result.committed){
-      toast('Esse pedido já foi separado por outro operador — abra o item de novo.', 'warn');
+      toast('Esse item já foi atualizado por outro operador — abra de novo.', 'warn');
       return;
     }
 
@@ -2026,13 +2066,12 @@ async function confirmarSeparacaoParcial(item, pedidosGrupo, idx, local, galpaoE
 
     const salvo = result.snapshot.val() || {};
     if(salvo.status === 'separado'){
-      toast(`✔ ${item.sku} separado — era o último pedido pendente desse item`, 'ok');
+      toast(`✔ ${item.sku} separado por completo`, 'ok');
     } else {
-      const restanteQtd = fmtQty(salvo.qtdPedida || 0);
-      toast(`✔ ${fmtQty(pedidoAlvo.quantidade)} un. separadas p/ ${pedidoAlvo.identificacao || 'esse pedido'} — restam ${restanteQtd} un. dos outros pedidos`, 'ok');
+      toast(`✔ ${fmtQty(somaOuter)} un. separadas — faltam ${fmtQty(salvo.qtdPedida || 0)} un., continua pendente na fila`, 'ok');
     }
     vibrate(90);
-    verificarConclusaoImportacoes(Object.assign({ id: item.id }, salvo), [pedidoAlvo.importId]).catch(()=>{});
+    verificarConclusaoImportacoes(Object.assign({ id: item.id }, salvo), completosOuter).catch(()=>{});
   } catch(e){
     toast('Erro ao salvar: ' + (e.message||e), 'error');
   }
@@ -2504,11 +2543,38 @@ function hojeISO(){ return dataLocalISO(nowTs()); }
 
 $('separados-data').value = hojeISO();
 
+// O que aparece em "Separados": itens separados por completo + CADA pedaço já
+// separado de itens que ainda estão pendentes (separação parcial). Cada
+// pedaço vira uma linha "virtual" — mesmo item, mas com o operador, a data, o
+// pedido e a quantidade daquele pedaço — então o resto da tela (agrupar por
+// pedido, filtro de data, busca) funciona igual sem saber da diferença.
+function itensSeparadosVisiveis(){
+  const out = [];
+  itemsArray().forEach(i => {
+    const parciais = Array.isArray(i.separacoesParciais) ? i.separacoesParciais : [];
+    if(parciais.length){
+      parciais.forEach(p => out.push(Object.assign({}, i, {
+        status: 'separado',
+        operadorSeparou: p.operador,
+        dataHoraSeparado: p.dataHora,
+        qtdSeparada: p.quantidade,
+        localFisico: p.localFisico || i.localFisico,
+        galpao: p.galpao || i.galpao,
+        identificacao: p.identificacao || i.identificacao,
+        pedidosAgrupados: [{ importId: p.importId, identificacao: p.identificacao, quantidade: p.quantidade }]
+      })));
+    } else if(i.status === 'separado'){
+      out.push(i);
+    }
+  });
+  return out;
+}
+
 function renderSeparados(){
   const termo = ($('busca-separados').value || '').trim().toLowerCase();
   const termoCode = normalizeCode(termo);
   const dataFiltro = $('separados-data').value;
-  let arr = itemsArray().filter(i => i.status === 'separado' && passaGalpao(i));
+  let arr = itensSeparadosVisiveis().filter(passaGalpao);
 
   if(dataFiltro){
     arr = arr.filter(i => i.dataHoraSeparado && dataLocalISO(i.dataHoraSeparado) === dataFiltro);
