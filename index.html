@@ -79,6 +79,11 @@
       </button>
     </div>
 
+    <div id="equipe-switch" class="modulo-mkt mt-2 grid grid-cols-3 gap-1.5">
+      <button data-equipe="todas" class="btn-equipe min-h-[38px] rounded-xl border text-xs font-black">Todas</button>
+      <button data-equipe="bahia" class="btn-equipe min-h-[38px] rounded-xl border text-xs font-black">🔵 Bahia</button>
+      <button data-equipe="mathias" class="btn-equipe min-h-[38px] rounded-xl border text-xs font-black">🟣 Mathias</button>
+    </div>
     <select id="sel-galpao" class="mt-2 w-full bg-brand-card border border-brand-border rounded-xl px-3 py-2.5 text-sm font-bold outline-none">
       <option value="todos">Todos os galpões</option>
     </select>
@@ -193,6 +198,15 @@
       <div>
         <div class="text-[10px] text-slate-500 font-bold uppercase mb-1">Identificação da separação (romaneio / pedido — opcional)</div>
         <input id="pdf-identificacao" placeholder="Ex: Romaneio 1234 ou Pedido 98765" class="w-full bg-black/40 border border-brand-border rounded-xl px-3 py-2.5 font-bold outline-none">
+      </div>
+      <div>
+        <div class="text-[10px] text-slate-500 font-bold uppercase mb-1">Equipe responsável por essa separação</div>
+        <select id="import-equipe" class="w-full bg-black/40 border border-brand-border rounded-xl px-3 py-2.5 font-bold outline-none">
+          <option value="">Escolha a equipe…</option>
+          <option value="bahia">🔵 Bahia — SPX · Flex · Shopee</option>
+          <option value="mathias">🟣 Mathias — ML coleta · ML agência · TikTok</option>
+        </select>
+        <div id="import-equipe-aviso" class="text-[10px] text-slate-500 mt-1">A equipe escolhida é quem vai ver esses itens na fila dela.</div>
       </div>
       <div class="flex items-center justify-between">
         <div class="font-black text-sm">Itens extraídos (<span id="pdf-count">0</span>)</div>
@@ -374,6 +388,12 @@
     <input id="input-operador-nome" placeholder="Seu nome" autocomplete="off" class="w-full bg-black/40 border border-brand-border rounded-xl px-3 py-3 outline-none font-bold">
     <input id="input-operador-senha" type="password" placeholder="Senha" autocomplete="off" class="w-full bg-black/40 border border-brand-border rounded-xl px-3 py-3 outline-none font-bold">
     <input id="input-operador-senha2" type="password" placeholder="Confirme a senha (primeiro acesso)" autocomplete="off" class="hidden w-full bg-black/40 border border-brand-yellow/50 rounded-xl px-3 py-3 outline-none font-bold">
+    <select id="input-operador-equipe" class="hidden w-full bg-black/40 border border-brand-yellow/50 rounded-xl px-3 py-3 outline-none font-bold">
+      <option value="">Qual é a sua equipe?</option>
+      <option value="bahia">🔵 Bahia — SPX · Flex · Shopee</option>
+      <option value="mathias">🟣 Mathias — ML coleta · ML agência · TikTok</option>
+      <option value="todas">Todas (supervisão)</option>
+    </select>
     <select id="input-operador-galpao" class="w-full bg-black/40 border border-brand-border rounded-xl px-3 py-3 outline-none font-bold"></select>
     <button id="btn-salvar-operador" class="w-full min-h-[46px] rounded-xl bg-brand-orange text-black font-black">Entrar</button>
     <button id="btn-cancelar-operador" class="hidden w-full min-h-[40px] rounded-xl bg-transparent border border-brand-border font-bold text-xs text-slate-400">Cancelar</button>
@@ -519,6 +539,7 @@
       <input id="adm-op-nome" placeholder="Nome do operador" autocomplete="off" class="w-full bg-black/40 border border-brand-border rounded-xl px-3 py-2.5 text-sm font-bold outline-none">
       <input id="adm-op-senha" placeholder="Senha (mín. 4 caracteres)" autocomplete="off" class="w-full bg-black/40 border border-brand-border rounded-xl px-3 py-2.5 text-sm font-bold outline-none">
       <select id="adm-op-galpao" class="w-full bg-black/40 border border-brand-border rounded-xl px-3 py-2.5 text-sm font-bold outline-none"></select>
+      <select id="adm-op-equipe" class="w-full bg-black/40 border border-brand-border rounded-xl px-3 py-2.5 text-sm font-bold outline-none"><option value="">Equipe (MKT)…</option><option value="bahia">🔵 Bahia</option><option value="mathias">🟣 Mathias</option><option value="todas">Todas (supervisão)</option></select>
       <button id="btn-adm-op-criar" class="w-full min-h-[42px] rounded-xl bg-brand-green text-black font-black text-sm">➕ Cadastrar</button>
     </div>
     <div id="adm-op-lista" class="space-y-2"></div>
@@ -580,13 +601,36 @@ function pathPausar(){ return PATHS[state.modulo].pausar; }
 
 const GALPOES = ['Leopoldo', '21 de Abril', 'Cesário'];
 
+// Duas equipes dividem a separação do MKT, cada uma com seus canais (só vale
+// no módulo MKT — o ERP não tem equipes). Cada importação e cada item guardam
+// a "equipe". Dados antigos (sem esse campo) são classificados pelo texto da
+// identificação ("FLEX 1", "SHOPEE 2", "ML 1"...). O que não bate com nenhum
+// canal (Amazon, Magalu, vazio) fica "sem equipe" e aparece pra todo mundo —
+// melhor aparecer pra dois do que sumir pra ambos.
+const EQUIPES = {
+  bahia:   { nome: 'Bahia',   icone: '🔵', canais: 'SPX · Flex · Shopee',            classe: 'bg-sky-500/15 text-sky-300 border border-sky-500/40' },
+  mathias: { nome: 'Mathias', icone: '🟣', canais: 'ML coleta · ML agência · TikTok', classe: 'bg-purple-500/15 text-purple-300 border border-purple-500/40' }
+};
+function inferirEquipe(identificacao){
+  const t = String(identificacao || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+  if(!t) return '';
+  if(/spx|flex|shopee/.test(t)) return 'bahia';
+  if(/\bml\d*\b|coleta|agencia|tik ?tok|\bttk\b/.test(t)) return 'mathias';
+  return '';
+}
+// Equipe de um item ou de uma importação ('' = sem equipe).
+function equipeDe(obj){
+  return (obj && obj.equipe && EQUIPES[obj.equipe] ? obj.equipe : '') || inferirEquipe(obj && obj.identificacao);
+}
+
 // Aviso de "novidades": como o app é usado por vários operadores em
 // dispositivos diferentes e não tem forma de "avisar todo mundo" ativamente,
 // a solução é comparar a versão atual com a última vista NESSE aparelho
 // (localStorage) — se mudou, mostra um modal com o que foi adicionado.
 // Pra lançar uma novidade: só bumpar APP_VERSAO e acrescentar um item aqui.
-const APP_VERSAO = '2026-10-06.2';
+const APP_VERSAO = '2026-11-12.1';
 const NOVIDADES_ATUAIS = [
+  'MKT agora tem DUAS EQUIPES: 🔵 Bahia (SPX · Flex · Shopee) e 🟣 Mathias (ML coleta · ML agência · TikTok). Tem um seletor no topo (Todas / Bahia / Mathias). Ao importar um PDF você escolhe a equipe responsável, e cada equipe vê só a fila dela. No primeiro acesso você também escolhe a sua equipe. Pra ver tudo, é só marcar "Todas". (O ERP continua igual.)',
   'Corrigido: se você informar MENOS do que falta (ex: faltam 8 e achou 4), só essas 4 vão pra "Separados" e as outras 4 continuam pendentes na fila. O card mostra "já separou 4 — faltam 4". Quando fechar o restante, o item vai pra Separados por completo.',
   'Agora o acesso é com nome e SENHA. No primeiro acesso você cria a sua (digite seu nome, uma senha e confirme). Da próxima vez é só nome + senha. Quem esquecer a senha fala com o administrador.',
   'Itens em revisão agora também aparecem na Fila, em vermelho (🚨 Revisão). Quando forem achados e separados, ficam com o marcador "🔁 Passou pela revisão" (passe o dedo/mouse pra ver quem não achou e quem achou).',
@@ -739,6 +783,7 @@ const state = {
   localizacoes: {},  // skuKey -> { sku, localFisico, galpao, atualizadoEm, atualizadoPor } — compartilhado entre os módulos
   operador: JSON.parse(safeGet('local', 'picking_operador') || 'null'),
   galpaoFiltro: safeGet('local', 'picking_galpao_filtro') || 'todos', // ajustado logo abaixo pelo galpão do operador, se ele nunca escolheu um filtro
+  equipeFiltro: safeGet('local', 'picking_equipe_filtro') || 'todas', // 'todas' | 'bahia' | 'mathias' (só MKT)
   pdfRows: [],
   pdfFileName: '',
   pdfFileHash: '',
@@ -762,6 +807,10 @@ if(state.operador && !state.operador.autenticado) state.operador = null;
 
 if(!safeGet('local', 'picking_galpao_filtro') && state.operadorSalvo && GALPOES.includes(state.operadorSalvo.galpao)){
   state.galpaoFiltro = state.operadorSalvo.galpao;
+}
+if(!EQUIPES[state.equipeFiltro]) state.equipeFiltro = 'todas';
+if(!safeGet('local', 'picking_equipe_filtro') && state.operadorSalvo && EQUIPES[state.operadorSalvo.equipe]){
+  state.equipeFiltro = state.operadorSalvo.equipe;
 }
 
 function uid(){ return 'op_' + Math.random().toString(36).slice(2, 9); }
@@ -1049,6 +1098,8 @@ function abrirModalOperador(){
   $('input-operador-senha').value = '';
   $('input-operador-senha2').value = '';
   $('input-operador-senha2').classList.add('hidden');
+  $('input-operador-equipe').classList.add('hidden');
+  $('input-operador-equipe').value = '';
   if(base && base.galpao) $('input-operador-galpao').value = base.galpao;
   $('operador-ajuda').textContent = (state.operadorSalvo && !state.operador)
     ? 'Agora o acesso é com senha. Digite sua senha — se for o primeiro acesso, crie uma (mín. ' + SENHA_MIN + ' caracteres).'
@@ -1063,10 +1114,11 @@ $('btn-cancelar-operador').addEventListener('click', () => $('modal-operador').c
 $('input-operador-nome').addEventListener('input', () => {
   $('input-operador-senha2').classList.add('hidden');
   $('input-operador-senha2').value = '';
+  $('input-operador-equipe').classList.add('hidden');
 });
 
-function concluirLogin(nome, galpao){
-  state.operador = { id: (state.operadorSalvo && state.operadorSalvo.id) || (state.operador && state.operador.id) || uid(), nome, galpao, autenticado: true };
+function concluirLogin(nome, galpao, equipe){
+  state.operador = { id: (state.operadorSalvo && state.operadorSalvo.id) || (state.operador && state.operador.id) || uid(), nome, galpao, equipe: equipe || '', autenticado: true };
   state.operadorSalvo = state.operador;
   safeSet('local', 'picking_operador', JSON.stringify(state.operador));
   $('operador-nome').textContent = nome;
@@ -1076,8 +1128,12 @@ function concluirLogin(nome, galpao){
   state.galpaoFiltro = galpao;
   $('sel-galpao').value = galpao;
   safeSet('local', 'picking_galpao_filtro', galpao);
+  // A equipe do operador (cadastrada por ele no 1º acesso ou pelo admin) vira o
+  // filtro de equipe. Sem equipe cadastrada, mantém o filtro que já estava.
+  if(equipe) { state.equipeFiltro = (equipe === 'bahia' || equipe === 'mathias') ? equipe : 'todas'; safeSet('local', 'picking_equipe_filtro', state.equipeFiltro); pintarSeletorEquipe(); }
   renderAll();
-  toast(`Bem-vindo, ${nome}! Separando só o que está em ${galpao}.`, 'ok');
+  const eqTxt = (state.modulo === 'mkt' && EQUIPES[state.equipeFiltro]) ? ` da equipe ${EQUIPES[state.equipeFiltro].nome}` : '';
+  toast(`Bem-vindo, ${nome}! Separando só o que está em ${galpao}${eqTxt}.`, 'ok');
 }
 
 $('btn-salvar-operador').addEventListener('click', async () => {
@@ -1101,7 +1157,7 @@ $('btn-salvar-operador').addEventListener('click', async () => {
         vibrate([40,60,40]);
         return;
       }
-      concluirLogin(rec.nome || nome, galpao);
+      concluirLogin(rec.nome || nome, galpao, rec.equipe);
       return;
     }
     // Primeiro acesso: pede pra confirmar a senha antes de criar o cadastro.
@@ -1109,22 +1165,25 @@ $('btn-salvar-operador').addEventListener('click', async () => {
     const senha2El = $('input-operador-senha2');
     if(senha2El.classList.contains('hidden')){
       senha2El.classList.remove('hidden');
+      $('input-operador-equipe').classList.remove('hidden');
       senha2El.focus();
-      toast('Primeiro acesso! Confirme a senha pra criar seu cadastro.', 'info');
+      toast('Primeiro acesso! Confirme a senha e escolha sua equipe.', 'info');
       return;
     }
     if(senha2El.value !== senha){ toast('As senhas não conferem', 'warn'); return; }
+    const equipe = $('input-operador-equipe').value;
+    if(!equipe){ toast('Escolha a sua equipe', 'warn'); return; }
     const cred = await montarCredenciais(senha);
     const result = await db.ref(`${PATH_OPERADORES}/${key}`).transaction(cur => {
       if(cur) return; // alguém cadastrou esse nome agora há pouco — não sobrescreve
-      return Object.assign({ nome, galpao, criadoEm: nowTs(), criadoPor: 'proprio' }, cred);
+      return Object.assign({ nome, galpao, equipe, criadoEm: nowTs(), criadoPor: 'proprio' }, cred);
     });
     if(!result.committed){
       senha2El.classList.add('hidden');
       toast('Esse nome já foi cadastrado — digite a senha dele.', 'warn');
       return;
     }
-    concluirLogin(nome, galpao);
+    concluirLogin(nome, galpao, equipe);
   } catch(e){
     toast('Erro ao entrar: ' + (e.message || e), 'error');
   } finally {
@@ -1154,6 +1213,7 @@ async function renderOperadoresAdmin(){
         </div>
         <div class="font-mono text-sm font-black text-slate-200 shrink-0" data-op-senha>••••••</div>
       </div>
+      <select class="sel-op-equipe mt-2 w-full bg-black/40 border border-brand-border rounded-lg px-2 py-1.5 text-[11px] font-bold outline-none" title="Equipe do operador (MKT)"><option value="">Sem equipe definida</option><option value="bahia">🔵 Bahia</option><option value="mathias">🟣 Mathias</option><option value="todas">Todas (supervisão)</option></select>
       <div class="grid grid-cols-3 gap-1.5 mt-2">
         <button class="btn-op-ver min-h-[34px] rounded-lg bg-brand-card2 border border-brand-border text-[11px] font-black">👁 Ver</button>
         <button class="btn-op-trocar min-h-[34px] rounded-lg bg-brand-card2 border border-brand-border text-[11px] font-black">🔑 Trocar</button>
@@ -1172,6 +1232,14 @@ async function renderOperadoresAdmin(){
       el.dataset.visivel = '1'; btn.textContent = '🙈 Ocultar';
     } catch(_){ toast('Não consegui ler essa senha — defina uma nova em "Trocar".', 'warn'); }
   }));
+  box.querySelectorAll('.sel-op-equipe').forEach(sel => {
+    const o = porKey[sel.closest('[data-op-key]').dataset.opKey];
+    sel.value = o.equipe || '';
+    sel.addEventListener('change', async () => {
+      try { await db.ref(`${PATH_OPERADORES}/${o.key}/equipe`).set(sel.value || null); toast(`Equipe de ${o.nome}: ${sel.value ? (EQUIPES[sel.value] ? EQUIPES[sel.value].nome : 'Todas') : 'nenhuma'}`, 'ok'); }
+      catch(e){ toast('Erro: ' + (e.message||e), 'error'); }
+    });
+  });
   box.querySelectorAll('.btn-op-trocar').forEach(btn => btn.addEventListener('click', async () => {
     const o = porKey[btn.closest('[data-op-key]').dataset.opKey];
     const nova = prompt(`Nova senha para ${o.nome} (mín. ${SENHA_MIN} caracteres):`);
@@ -1210,6 +1278,7 @@ $('btn-adm-op-criar').addEventListener('click', async () => {
   const nome = $('adm-op-nome').value.trim();
   const senha = $('adm-op-senha').value;
   const galpao = $('adm-op-galpao').value;
+  const equipe = $('adm-op-equipe').value;
   const key = nomeKey(nome);
   if(!key){ toast('Informe o nome do operador', 'warn'); return; }
   if(senha.length < SENHA_MIN){ toast(`A senha precisa ter pelo menos ${SENHA_MIN} caracteres`, 'warn'); return; }
@@ -1220,9 +1289,9 @@ $('btn-adm-op-criar').addEventListener('click', async () => {
     const cred = await montarCredenciais(senha);
     if(existente){
       if(!confirm(`${existente.nome} já está cadastrado. Trocar a senha dele por essa?`)) return;
-      await ref.update(Object.assign(cred, { galpao, atualizadoEm: nowTs(), atualizadoPor: 'admin' }));
+      await ref.update(Object.assign(cred, { galpao, equipe: equipe || null, atualizadoEm: nowTs(), atualizadoPor: 'admin' }));
     } else {
-      await ref.set(Object.assign({ nome, galpao, criadoEm: nowTs(), criadoPor: 'admin' }, cred));
+      await ref.set(Object.assign({ nome, galpao, equipe: equipe || null, criadoEm: nowTs(), criadoPor: 'admin' }, cred));
     }
     toast(`${nome} cadastrado`, 'ok');
     $('adm-op-nome').value = ''; $('adm-op-senha').value = '';
@@ -1239,6 +1308,25 @@ $('sel-galpao').addEventListener('change', e => {
   safeSet('local', 'picking_galpao_filtro', state.galpaoFiltro);
   renderAll();
 });
+
+// Seletor de equipe no topo (MKT): Todas / Bahia / Mathias.
+function pintarSeletorEquipe(){
+  document.querySelectorAll('.btn-equipe').forEach(b => {
+    const ativo = b.dataset.equipe === state.equipeFiltro;
+    const cor = b.dataset.equipe === 'bahia' ? 'bg-sky-500 text-black border-sky-400'
+              : b.dataset.equipe === 'mathias' ? 'bg-purple-500 text-black border-purple-400'
+              : 'bg-brand-orange text-black border-brand-orange';
+    b.className = 'btn-equipe min-h-[38px] rounded-xl border text-xs font-black ' + (ativo ? cor : 'bg-brand-card text-slate-300 border-brand-border');
+  });
+}
+function definirEquipeFiltro(eq){
+  state.equipeFiltro = (eq === 'bahia' || eq === 'mathias') ? eq : 'todas';
+  safeSet('local', 'picking_equipe_filtro', state.equipeFiltro);
+  pintarSeletorEquipe();
+  renderAll();
+}
+document.querySelectorAll('.btn-equipe').forEach(b => b.addEventListener('click', () => definirEquipeFiltro(b.dataset.equipe)));
+pintarSeletorEquipe();
 
 /* =========================================================================
  * TABS
@@ -1350,7 +1438,7 @@ function renderKpis(){
   const todos = itemsArray();
   // Contadores seguem o galpão escolhido — senão o separador veria "22
   // pendentes" e só 8 na lista (os outros são do ponto de outra pessoa).
-  const arr = todos.filter(passaGalpao);
+  const arr = todos.filter(passaFiltros);
   $('kpi-pendentes').textContent = arr.filter(i => i.status === 'pendente').length;
   const revisao = arr.filter(i => i.status === 'revisao').length;
   $('kpi-revisao').textContent = revisao;
@@ -1358,12 +1446,26 @@ function renderKpis(){
   $('kpi-faltando').textContent = arr.filter(i => i.status === 'falta_definitiva').length;
 
   const aviso = $('aviso-galpao');
-  if(state.galpaoFiltro === 'todos'){
-    aviso.textContent = 'Mostrando todos os galpões — escolha o seu pra ver só o que está no seu ponto.';
+  const abertos = todos.filter(i => i.status === 'pendente' || i.status === 'revisao');
+  const outrosGalpoes = abertos.filter(i => !passaGalpao(i) && passaEquipe(i)).length;
+  const outraEquipe = abertos.filter(i => !passaEquipe(i)).length;
+  const partes = [];
+  if(state.modulo === 'mkt' && state.equipeFiltro !== 'todas'){
+    partes.push(`${EQUIPES[state.equipeFiltro].icone} Equipe ${EQUIPES[state.equipeFiltro].nome} (${EQUIPES[state.equipeFiltro].canais})`);
+  }
+  if(state.galpaoFiltro !== 'todos') partes.push(`📍 ${state.galpaoFiltro}`);
+  if(!partes.length){
+    aviso.textContent = state.modulo === 'mkt'
+      ? 'Mostrando tudo (todas as equipes e galpões) — escolha a sua equipe/galpão pra ver só o seu.'
+      : 'Mostrando todos os galpões — escolha o seu pra ver só o que está no seu ponto.';
     aviso.className = 'mt-1.5 text-[10px] text-slate-500 text-center';
   } else {
-    const outros = todos.filter(i => (i.status === 'pendente' || i.status === 'revisao') && !passaGalpao(i)).length;
-    aviso.textContent = `📍 Separando só o que está em ${state.galpaoFiltro}` + (outros ? ` · ${outros} item(ns) em outros galpões (não são do seu ponto)` : '');
+    let txt = 'Separando só: ' + partes.join(' · ');
+    const fora = [];
+    if(outraEquipe) fora.push(`${outraEquipe} de outra equipe`);
+    if(outrosGalpoes) fora.push(`${outrosGalpoes} em outros galpões`);
+    if(fora.length) txt += ` — fora do seu filtro: ${fora.join(', ')}`;
+    aviso.textContent = txt;
     aviso.className = 'mt-1.5 text-[10px] text-sky-300 font-bold text-center';
   }
   const badge = $('badge-revisao');
@@ -1373,6 +1475,24 @@ function renderKpis(){
 
 function passaGalpao(item){
   return state.galpaoFiltro === 'todos' || item.galpao === state.galpaoFiltro;
+}
+
+// Filtro de equipe (só MKT). Item/importação sem equipe definida passa em
+// qualquer filtro — não pode sumir da tela de ninguém.
+function passaEquipe(obj){
+  if(state.modulo !== 'mkt' || state.equipeFiltro === 'todas') return true;
+  const eq = equipeDe(obj);
+  return !eq || eq === state.equipeFiltro;
+}
+function passaFiltros(item){ return passaGalpao(item) && passaEquipe(item); }
+
+// Etiqueta da equipe no card — só quando está vendo todas (com uma equipe
+// escolhida seria repetição) e só no MKT.
+function tagEquipe(obj){
+  if(state.modulo !== 'mkt' || state.equipeFiltro !== 'todas') return '';
+  const eq = equipeDe(obj);
+  if(!eq) return `<span class="tag-pill bg-slate-500/15 text-slate-400 border border-slate-500/30">sem equipe</span>`;
+  return `<span class="tag-pill ${EQUIPES[eq].classe}">${EQUIPES[eq].icone} ${EQUIPES[eq].nome}</span>`;
 }
 
 // Bloco de detalhamento "quanto vai pra cada pedido/local", usado na Fila e
@@ -1469,6 +1589,7 @@ function itemCardHtml(item){
         <div class="font-black text-sm break-all leading-tight">${esc(item.sku)}</div>
         <div class="flex items-center gap-1.5 flex-wrap mt-1">
           ${statusTag}
+          ${tagEquipe(item)}
           ${tagPassouRevisao(item)}
           ${ondeEsta}
           ${prioridadeTag}
@@ -1515,7 +1636,7 @@ function melhorPedidoDoItem(item){
 function renderFila(){
   // Item em revisão também aparece na Fila (em vermelho) — além da aba
   // Revisão — pra ninguém esquecer dele; ainda precisa ser achado.
-  const arr = itemsArray().filter(i => (i.status === 'pendente' || i.status === 'revisao') && passaGalpao(i));
+  const arr = itemsArray().filter(i => (i.status === 'pendente' || i.status === 'revisao') && passaFiltros(i));
   // No ERP, respeita a ordem de separação (emergencial > retirada > entrega,
   // depois quem entrega mais cedo). No MKT continua só por ordem de chegada.
   arr.sort((a,b) => {
@@ -1535,7 +1656,7 @@ function renderFila(){
 }
 
 function renderRevisao(){
-  const arr = itemsArray().filter(i => i.status === 'revisao' && passaGalpao(i));
+  const arr = itemsArray().filter(i => i.status === 'revisao' && passaFiltros(i));
   const box = $('lista-revisao');
   if(!arr.length){
     box.innerHTML = `<div class="text-center text-slate-500 text-xs border border-dashed border-brand-border rounded-xl p-6">Nenhum item em revisão no momento.</div>`;
@@ -1708,16 +1829,22 @@ function handleScannedCode(raw){
   const matches = itemsArray().filter(i =>
     itemMatchesCode(i, code) &&
     (i.status === 'pendente' || i.status === 'revisao') &&
-    passaGalpao(i)
+    passaFiltros(i)
   );
 
   if(matches.length === 0){
     // Existe, mas em outro galpão? Avisa onde está pra o operador não achar
     // que o código é inválido (nem sair procurando fora do ponto dele).
-    const noutroGalpao = itemsArray().filter(i => itemMatchesCode(i, code) && (i.status === 'pendente' || i.status === 'revisao'));
-    if(noutroGalpao.length){
-      const onde = [...new Set(noutroGalpao.map(i => i.galpao || '--'))].join(', ');
-      toast(`Esse produto está em ${onde} — não é do seu ponto (${state.galpaoFiltro}).`, 'warn');
+    const noutroLugar = itemsArray().filter(i => itemMatchesCode(i, code) && (i.status === 'pendente' || i.status === 'revisao'));
+    if(noutroLugar.length){
+      const deOutraEquipe = noutroLugar.filter(i => !passaEquipe(i));
+      if(deOutraEquipe.length === noutroLugar.length){
+        const eqs = [...new Set(deOutraEquipe.map(i => EQUIPES[equipeDe(i)] ? EQUIPES[equipeDe(i)].nome : '--'))].join(', ');
+        toast(`Esse produto é da equipe ${eqs} (${deOutraEquipe[0].identificacao || '--'}) — não é do seu time.`, 'warn');
+      } else {
+        const onde = [...new Set(noutroLugar.filter(passaEquipe).map(i => i.galpao || '--'))].join(', ');
+        toast(`Esse produto está em ${onde} — não é do seu ponto (${state.galpaoFiltro}).`, 'warn');
+      }
       vibrate([40,60,40]);
       return;
     }
@@ -2208,7 +2335,7 @@ function identificacoesDoItemCliente(item){
 }
 
 function computeProdutividade(){
-  const arr = itemsArray();
+  const arr = itemsArray().filter(passaEquipe); // com uma equipe escolhida, só os números dela
   const porOperador = {};
   const get = nome => (porOperador[nome] = porOperador[nome] || { nome, pacotes: 0, penalidades: 0, pedidos: new Set() });
 
@@ -2251,7 +2378,7 @@ function computeResumoGeral(){
   const hoje = ts => new Date(ts).toDateString() === hojeStr;
 
   let itensHoje = 0, itensMes = 0;
-  itemsArray().forEach(i => {
+  itemsArray().filter(passaEquipe).forEach(i => {
     // Mesmo critério do computeProdutividade: item com separação parcial
     // conta cada pedaço (já cobre o pedaço final que fecha o item), não o
     // item inteiro de novo — senão contaria em dobro.
@@ -2270,7 +2397,7 @@ function computeResumoGeral(){
   });
 
   let pedidosHoje = 0, pedidosMes = 0;
-  Object.values(state.importacoes).forEach(imp => {
+  Object.values(state.importacoes).filter(passaEquipe).forEach(imp => {
     if(!imp.concluidaEm) return;
     if(hoje(imp.concluidaEm)) pedidosHoje++;
     if(mesmoMes(imp.concluidaEm)) pedidosMes++;
@@ -2574,7 +2701,7 @@ function renderSeparados(){
   const termo = ($('busca-separados').value || '').trim().toLowerCase();
   const termoCode = normalizeCode(termo);
   const dataFiltro = $('separados-data').value;
-  let arr = itensSeparadosVisiveis().filter(passaGalpao);
+  let arr = itensSeparadosVisiveis().filter(passaFiltros);
 
   if(dataFiltro){
     arr = arr.filter(i => i.dataHoraSeparado && dataLocalISO(i.dataHoraSeparado) === dataFiltro);
@@ -2868,7 +2995,7 @@ $('btn-confirmar-sobra').addEventListener('click', async () => {
 });
 
 function renderSobras(){
-  const arr = itemsArray().filter(i => i.sobra).sort((a,b) => (b.sobraTs||0) - (a.sobraTs||0));
+  const arr = itemsArray().filter(i => i.sobra && passaEquipe(i)).sort((a,b) => (b.sobraTs||0) - (a.sobraTs||0));
   const box = $('lista-sobras');
   if(!arr.length){
     const rotulo = state.modulo === 'erp' ? 'pendência registrada' : 'sobra registrada';
@@ -3143,6 +3270,8 @@ $('input-pdf').addEventListener('change', async e => {
 
     state.pdfRows = rows.length ? rows : [emptyPdfRow()];
     renderPdfPreview();
+    state.equipeImportManual = false;
+    $('import-equipe').value = equipePadraoImport();
     $('pdf-preview-wrap').classList.remove('hidden');
   } catch(err){
     $('pdf-status').textContent = 'Erro ao ler o PDF: ' + (err.message || err) + ' — se estiver no celular, tente pelo computador pra confirmar se é específico do aparelho.';
@@ -3879,6 +4008,22 @@ function renderPdfPreview(){
 
 $('btn-add-row').addEventListener('click', () => { state.pdfRows.push(emptyPdfRow()); renderPdfPreview(); });
 
+// Equipe sugerida pra importação: pela identificação digitada ("SHOPEE 1" →
+// Bahia), senão a equipe que está sendo vista, senão a do operador.
+function equipePadraoImport(){
+  const inf = inferirEquipe($('pdf-identificacao').value);
+  if(inf) return inf;
+  if(EQUIPES[state.equipeFiltro]) return state.equipeFiltro;
+  if(state.operador && EQUIPES[state.operador.equipe]) return state.operador.equipe;
+  return '';
+}
+$('pdf-identificacao').addEventListener('input', () => {
+  if(state.equipeImportManual) return;
+  const inf = inferirEquipe($('pdf-identificacao').value);
+  if(inf) $('import-equipe').value = inf;
+});
+$('import-equipe').addEventListener('change', () => { state.equipeImportManual = true; });
+
 $('btn-cancelar-import').addEventListener('click', () => {
   state.pdfRows = [];
   state.pdfFileName = '';
@@ -3886,6 +4031,7 @@ $('btn-cancelar-import').addEventListener('click', () => {
   $('pdf-preview-wrap').classList.add('hidden');
   $('pdf-status').textContent = '';
   $('pdf-identificacao').value = '';
+  $('import-equipe').value = '';
 });
 
 $('btn-confirmar-import').addEventListener('click', async () => {
@@ -3894,6 +4040,12 @@ $('btn-confirmar-import').addEventListener('click', async () => {
   const rows = state.pdfRows.filter(r => String(r.sku).trim());
   if(!rows.length){ toast('Nenhum item válido para importar', 'warn'); return; }
   const identificacao = $('pdf-identificacao').value.trim();
+  const equipe = $('import-equipe').value;
+  if(!equipe){ toast('Escolha a equipe responsável (Bahia ou Mathias)', 'warn'); $('import-equipe').focus(); return; }
+  // Escolheu uma equipe mas a identificação é claramente de outra (ex: "ML 1"
+  // marcada como Bahia): pergunta antes — foi o erro mais provável de cair na fila errada.
+  const sugerida = inferirEquipe(identificacao);
+  if(sugerida && sugerida !== equipe && !confirm(`A identificação "${identificacao}" parece ser da equipe ${EQUIPES[sugerida].nome}, mas você escolheu ${EQUIPES[equipe].nome}. Enviar mesmo assim pra ${EQUIPES[equipe].nome}?`)) return;
 
   setBotaoCarregando(btn, true, 'Enviando...');
   try {
@@ -3905,6 +4057,7 @@ $('btn-confirmar-import').addEventListener('click', async () => {
     hashArquivo: state.pdfFileHash || '',
     status: 'ativo',
     identificacao,
+    equipe,
     totalItens: rows.length,
     operador: state.operador ? state.operador.nome : '',
     criadoEm: nowTs(),
@@ -3944,11 +4097,11 @@ $('btn-confirmar-import').addEventListener('click', async () => {
     let existenteId = null;
     for(const id of Object.keys(updates)){
       const cand = updates[id];
-      if(cand.status !== 'pendente' || (cand.galpao || GALPOES[0]) !== galpao) continue;
+      if(cand.status !== 'pendente' || (cand.galpao || GALPOES[0]) !== galpao || equipeDe(cand) !== equipe) continue;
       if(normalizeCode(cand.sku) === skuNorm){ existenteId = id; break; }
     }
     if(!existenteId){
-      const achado = itemsArray().find(i => i.status === 'pendente' && (i.galpao || GALPOES[0]) === galpao && normalizeCode(i.sku) === skuNorm);
+      const achado = itemsArray().find(i => i.status === 'pendente' && (i.galpao || GALPOES[0]) === galpao && equipeDe(i) === equipe && normalizeCode(i.sku) === skuNorm);
       if(achado) existenteId = achado.id;
     }
 
@@ -3989,6 +4142,7 @@ $('btn-confirmar-import').addEventListener('click', async () => {
         estoqueLocais: String(r.estoqueLocais||'').trim(),
         foto: String(r.foto||'').trim(),
         galpao,
+        equipe,
         status: 'pendente',
         importId,
         pedidosAgrupados: [{ importId, identificacao, quantidade: qtdNova }],
@@ -4007,6 +4161,7 @@ $('btn-confirmar-import').addEventListener('click', async () => {
   $('pdf-preview-wrap').classList.add('hidden');
   $('pdf-status').textContent = '';
   $('pdf-identificacao').value = '';
+  $('import-equipe').value = '';
   switchTab('fila');
   } catch(e){
     toast('Erro ao enviar para a fila: ' + (e.message||e), 'error');
@@ -4109,7 +4264,7 @@ function formatarRelogio(ms){
 }
 
 function renderImportacoes(){
-  let arr = Object.entries(state.importacoes).map(([id,v]) => ({id, ...v})).filter(i => i.status !== 'removido');
+  let arr = Object.entries(state.importacoes).map(([id,v]) => ({id, ...v})).filter(i => i.status !== 'removido' && passaEquipe(i));
   // No MKT todo mundo empata (não tem tipoPedido/dataPrevista), então cai
   // no desempate por mais recente — igual ao comportamento de sempre. No
   // ERP, emergencial > retirada > entrega, e dentro do mesmo tipo quem
@@ -4164,6 +4319,7 @@ function renderImportacoes(){
       <div class="flex items-center justify-between gap-2">
         <div class="min-w-0">
           <div class="text-xs font-bold break-words leading-snug">${esc(i.identificacao || 'Sem identificação')} · ${esc(i.totalItens||0)} itens · ${esc(i.operador||'--')}</div>
+          ${state.modulo === 'mkt' && state.equipeFiltro === 'todas' ? `<div class="mt-1">${tagEquipe(i)}</div>` : ''}
           <div class="text-[10px] text-slate-500">${i.criadoEm ? new Date(i.criadoEm).toLocaleString('pt-BR') : ''}</div>
           ${datasArea}
           <div class="text-[10px] text-slate-500 mt-0.5">${pendentes} pendente(s) · ${separados} separado(s) · ${faltando} falta(s)</div>
